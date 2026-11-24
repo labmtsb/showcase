@@ -10,6 +10,8 @@
 
     @fonts
 
+    @livewireStyles
+
     <!-- Styles / Scripts -->
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
         @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -22,17 +24,8 @@
         <div class="px-3 py-3 lg:px-5 lg:pl-3">
             <div class="flex items-center justify-between">
                 <div class="flex items-center justify-start rtl:justify-end">
-                    <button data-drawer-target="top-bar-sidebar" data-drawer-toggle="top-bar-sidebar"
-                        aria-controls="top-bar-sidebar" type="button"
-                        class="sm:hidden text-heading bg-transparent box-border border border-transparent hover:bg-neutral-secondary-medium focus:ring-4 focus:ring-neutral-tertiary font-medium leading-5 rounded-base text-sm p-2 focus:outline-none">
-                        <span class="sr-only">Open sidebar</span>
-                        <svg class="w-6 h-6" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24"
-                            height="24" fill="none" viewBox="0 0 24 24">
-                            <path stroke="currentColor" stroke-linecap="round" stroke-width="2"
-                                d="M5 7h14M5 12h14M5 17h10" />
-                        </svg>
-                    </button>
-                    <a href="https://flowbite.com" class="flex ms-2 md:me-24">
+
+                    <a href="#" class="flex ms-2 md:me-24">
                         <img src="https://flowbite.com/docs/images/logo.svg" class="h-6 me-3" alt="FlowBite Logo" />
                         <span
                             class="self-center text-lg font-semibold whitespace-nowrap dark:text-white">Flowbite</span>
@@ -62,7 +55,7 @@
     <div class="w-full h-screen flex flex-col items-center justify-center gap-4">
 
         <form class="bg-neutral-primary-soft block w-100 p-6 border border-default rounded-base shadow-xs"
-            action="{{ route('attempt_login') }}" method="POST">
+            action="{{ route('attempt_login') }}" method="POST" x-data="{ submitting: false }" @submit="submitting = true">
             @if (session('response'))
                 <div class="p-4 mb-4 text-sm text-fg-danger-strong rounded-base bg-danger-soft" role="alert">
                     <span class="font-medium">Oops!</span> {{ session('response') }}
@@ -70,31 +63,75 @@
             @endif
 
             @csrf
+
+
             <div class="mb-5">
-                <label for="email" class="block mb-2.5 text-sm font-medium text-heading">Your email</label>
-                <input type="email" id="email" name="email"
-                    class="bg-neutral-secondary-medium border border-default-medium text-heading text-sm rounded-base focus:ring-brand focus:border-brand block w-full px-3 py-2.5 shadow-xs placeholder:text-body"
-                    placeholder="id@lab.net" required />
+                <label for="email"
+                    class="block mb-2.5 text-sm font-medium {{ $errors->has('email') ? 'text-fg-danger-strong' : 'text-heading' }}">
+                    Your email
+                </label>
+
+                <input type="email" id="email" name="email" required
+                    class="text-sm rounded-base block w-full px-3 py-2.5 shadow-xs {{ $errors->has('email')
+                        ? 'bg-danger-soft border border-danger-subtle text-fg-danger-strong placeholder:text-fg-danger-strong focus:ring-danger focus:border-danger'
+                        : 'bg-neutral-secondary-medium border border-default-medium text-heading placeholder:text-body focus:ring-brand focus:border-brand' }}"
+                    placeholder="id@lab.net" value="{{ old('email') }}" />
+
+                @error('email')
+                    <p class="mt-2.5 text-sm
+                    text-fg-danger-strong">
+                        {{ $message }}
+                    </p>
+                @enderror
             </div>
+
+
+
             <div class="mb-5">
-                <label for="password" class="block mb-2.5 text-sm font-medium text-heading">Your password</label>
-                <input type="password" id="password" name="password"
-                    class="bg-neutral-secondary-medium border border-default-medium text-heading text-sm rounded-base focus:ring-brand focus:border-brand block w-full px-3 py-2.5 shadow-xs placeholder:text-body"
-                    placeholder="••••••••" required />
+                <label for="password"
+                    class="block mb-2.5 text-sm font-medium {{ $errors->has('password') ? 'text-fg-danger-strong' : 'text-heading' }}">
+                    Your password
+                </label>
+
+                <input type="password" id="password" name="password" required
+                    class="text-sm rounded-base block w-full px-3 py-2.5 shadow-xs {{ $errors->has('password')
+                        ? 'bg-danger-soft border border-danger-subtle text-fg-danger-strong placeholder:text-fg-danger-strong focus:ring-danger focus:border-danger'
+                        : 'bg-neutral-secondary-medium border border-default-medium text-heading placeholder:text-body focus:ring-brand focus:border-brand' }}" />
+
+                @error('password')
+                    <p class="mt-2.5 text-sm text-fg-danger-strong">
+                        {{ $message }}
+                    </p>
+                @enderror
             </div>
+
+
             <label for="remember" class="flex items-center mb-5">
                 <input id="remember" type="checkbox" value="" name="remember"
                     class="w-4 h-4 border border-default-medium rounded-xs bg-neutral-secondary-medium focus:ring-2 focus:ring-brand-soft" />
                 <p class="ms-2 text-sm font-medium text-heading select-none">Remember me</p>
             </label>
-            <button type="submit"
-                class="text-white bg-brand box-border border border-transparent hover:bg-brand-strong focus:ring-4 focus:ring-brand-medium shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none">Sign
-                in</button>
+
+            <button type="submit" :disabled="submitting"
+                class="text-white box-border border border-transparent focus:ring-4 focus:ring-brand-medium shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none"
+                :class="submitting
+                    ?
+                    'bg-gray-400 cursor-not-allowed' :
+                    'bg-brand hover:bg-brand-strong'">
+                <svg x-show="submitting" class="w-4 h-4 mr-2 animate-spin inline" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                        stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+
+                <span x-text="submitting ? 'Signing in...' : 'Sign in'"></span>
+            </button>
         </form>
     </div>
 
-
     <script src="/static/theme.js"></script>
+
+    @livewireScripts
 </body>
 
 </html>

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+// use App\Http\Controllers\ProjectController;
 use Illuminate\Support\Facades\Route;
 
 Route::group(['middleware' => ['guest']], function () {
@@ -9,17 +10,11 @@ Route::group(['middleware' => ['guest']], function () {
 });
 
 Route::group(['middleware' => ['auth']], function () {
-    Route::get('/home', function () {
-        return view('home');
-    })->name('home');
 
-    Route::get('/projects', function () {
-        return view('project.projects');
-    })->name('projects');
+    Route::livewire('/home', 'pages::home.show-home')->name('home');
 
-    Route::get('/projects/manage', function () {
-        return view('project.manage');
-    })->name('manage');
+    // Route::get('/projects', [ProjectController::class, 'index'])->name('projects');
+    Route::livewire('/projects', 'pages::project.show-project')->name('projects');
 
     // logout
     Route::get('/logout', [AuthController::class, 'logout'])->name('logout');

@@ -1,6 +1,6 @@
-<aside id="top-bar-sidebar"
-    class="fixed top-0 left-0 z-40 w-64 h-full transition-transform -translate-x-full sm:translate-x-0"
-    aria-label="Sidebar">
+<aside x-data="{ open: false }" @toggle-sidebar.window="open = !open"
+    class="fixed top-0 left-0 z-40 w-64 h-screen transition-transform sm:translate-x-0"
+    :class="open ? 'translate-x-0' : '-translate-x-full'">
     <div class="h-full px-3 py-4 overflow-y-auto bg-neutral-primary-soft border-e border-default">
         <a href="https://flowbite.com/" class="flex items-center ps-2.5 mb-5">
             <img src="https://flowbite.com/docs/images/logo.svg" class="h-6 me-3" alt="Flowbite Logo" />
@@ -8,7 +8,7 @@
         </a>
         <ul class="space-y-2 font-medium">
             <li>
-                <a href="{{ url('/home') }}"
+                <a href="/home" wire:navigate
                     class="flex items-center px-2 py-1.5 text-body rounded-base hover:bg-neutral-tertiary hover:text-fg-brand group">
                     <svg class="w-5 h-5 transition duration-75 group-hover:text-fg-brand" aria-hidden="true"
                         xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none"
@@ -22,7 +22,7 @@
                 </a>
             </li>
             <li>
-                <a href="{{ url('/projects') }}"
+                <a href="/projects" wire:navigate
                     class="flex items-center px-2 py-1.5 text-body rounded-base hover:bg-neutral-tertiary hover:text-fg-brand group">
 
 
