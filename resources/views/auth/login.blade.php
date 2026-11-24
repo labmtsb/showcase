@@ -61,23 +61,30 @@
 
     <div class="w-full h-screen flex flex-col items-center justify-center gap-4">
 
-        <form class="bg-neutral-primary-soft block w-100 p-6 border border-default rounded-base shadow-xs">
+        <form class="bg-neutral-primary-soft block w-100 p-6 border border-default rounded-base shadow-xs"
+            action="{{ route('attempt_login') }}" method="POST">
+            @if (session('response'))
+                <div class="p-4 mb-4 text-sm text-fg-danger-strong rounded-base bg-danger-soft" role="alert">
+                    <span class="font-medium">Oops!</span> {{ session('response') }}
+                </div>
+            @endif
+
+            @csrf
             <div class="mb-5">
                 <label for="email" class="block mb-2.5 text-sm font-medium text-heading">Your email</label>
-                <input type="email" id="email"
+                <input type="email" id="email" name="email"
                     class="bg-neutral-secondary-medium border border-default-medium text-heading text-sm rounded-base focus:ring-brand focus:border-brand block w-full px-3 py-2.5 shadow-xs placeholder:text-body"
                     placeholder="id@lab.net" required />
             </div>
             <div class="mb-5">
                 <label for="password" class="block mb-2.5 text-sm font-medium text-heading">Your password</label>
-                <input type="password" id="password"
+                <input type="password" id="password" name="password"
                     class="bg-neutral-secondary-medium border border-default-medium text-heading text-sm rounded-base focus:ring-brand focus:border-brand block w-full px-3 py-2.5 shadow-xs placeholder:text-body"
                     placeholder="••••••••" required />
             </div>
             <label for="remember" class="flex items-center mb-5">
-                <input id="remember" type="checkbox" value=""
-                    class="w-4 h-4 border border-default-medium rounded-xs bg-neutral-secondary-medium focus:ring-2 focus:ring-brand-soft"
-                    required />
+                <input id="remember" type="checkbox" value="" name="remember"
+                    class="w-4 h-4 border border-default-medium rounded-xs bg-neutral-secondary-medium focus:ring-2 focus:ring-brand-soft" />
                 <p class="ms-2 text-sm font-medium text-heading select-none">Remember me</p>
             </label>
             <button type="submit"

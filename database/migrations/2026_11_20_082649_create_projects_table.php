@@ -19,12 +19,13 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             $table->string('project_name', 125);
-            $table->string('slug', 125);
+            $table->string('slug', 225);
+            $table->unique(['user_id', 'slug']);
             $table->unsignedTinyInteger('grade')->default(0);
             $table->unsignedInteger('likes')->default(0);
             $table->unsignedInteger('comments')->default(0);
 
-            $table->string('path', 125);
+            $table->string('path', 225);
 
             $table->timestamps();
         });
