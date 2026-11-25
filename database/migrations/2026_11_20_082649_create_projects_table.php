@@ -19,6 +19,7 @@ return new class extends Migration
                 ->cascadeOnDelete();
 
             $table->string('project_name', 125);
+            $table->unique(['user_id', 'project_name']);
             $table->string('slug', 225);
             $table->unique(['user_id', 'slug']);
             $table->unsignedTinyInteger('grade')->default(0);

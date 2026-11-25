@@ -4,6 +4,7 @@ use Livewire\Component;
 use App\Models\Project;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 new class extends Component {
     public string $title = 'Projects';
@@ -47,10 +48,17 @@ new class extends Component {
         // basic validation: only letters A-Z allowed
         $this->validate(
             [
-                'projectName' => ['required', 'string', 'max:125', 'regex:/^[A-Za-z\s]+$/'],
+                'projectName' => [
+                    'required',
+                    'string',
+                    'max:125',
+                    'regex:/^[A-Za-z\s]+$/',
+                    Rule::unique('projects', 'project_name')->where(fn ($query) => $query->where('user_id', Auth::id())),
+                ],
             ],
             [
                 'projectName.regex' => 'Project name may only contain letters A-Z (no numbers or symbols).',
+                'projectName.unique' => 'You already have a project with this name.',
             ],
         );
 
