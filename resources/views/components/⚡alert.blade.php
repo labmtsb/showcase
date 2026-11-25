@@ -31,7 +31,7 @@ new class extends Component {
 
     public function mount($variant = '')
     {
-        $this->variant = $this->variants[$type] ?? $this->variants['info']
+        $this->variant = $this->variants[$this->type] ?? $this->variants['info'];
     }
 };
 ?>
