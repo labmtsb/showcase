@@ -43,7 +43,7 @@ new class extends Component {
 
         session()->regenerate();
 
-        $this->redirectIntended(default: route('home'), navigate: true);
+        $this->redirectIntended(route('home'), true);
     }
 
     public function rendering($view)
@@ -58,25 +58,23 @@ new class extends Component {
 <div>
     <div class="w-full h-screen flex flex-col items-center justify-center gap-4">
 
-        <livewire:form class="block w-100" :action="route('attempt_login')" state="submitLogin">
-            {{-- <livewire:form class="block w-100" wire:submit="login" state="submitLogin"> --}}
-            {{-- <form wire:submit="login"
-            class="block w-100 bg-neutral-primary-soft block p-6 border border-default rounded-base shadow-xs"> --}}
+        <x-form livewire action="login"
+            class="block w-100 bg-neutral-primary-soft block p-6 border border-default rounded-base shadow-xs">
+
             @if (session('response'))
-                <livewire:alert :type="session('response')['type']">
+                <x-alert :type="session('response')['type']" dismissible>
                     {{ session('response')['msg'] }}
-                </livewire:alert>
+                </x-alert>
             @endif
 
-            <livewire:text-input type="text" name="email" label="Your email" placeholder="id@lab.net" required />
+            <x-text-input name="email" label="Your email" placeholder="id@lab.net" wire:model="email" required />
 
-            <livewire:text-input type="password" name="password" label="Password" required />
+            <x-text-input name="password" label="Your password" type="password" wire:model="password" required />
 
-            <livewire:checkbox name="remember" label="Remember me" />
+            <x-checkbox name="remember" label="Remember me" wire:model="remember" />
 
-            <livewire:button label="Sign In" loading_label="Signing In..." target="login" state="submitLogin" />
-            {{-- </form> --}}
-        </livewire:form>
+            <x-button type="submit" label="Sign in" loading-label="Signing in..." target="login" full />
+        </x-form>
 
     </div>
 </div>
