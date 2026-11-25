@@ -21,16 +21,8 @@ new class extends Component {
      */
     public $projectName = '';
 
-    public $slug = null;
-
-    // signal to frontend to close modal after save (entangled with Alpine)
-    public $closeModal = false;
-
     // toast flag to show success message
     public $showToast = false;
-
-    // server-side saving flag
-    public $isSaving = false;
 
     /**
      * Called by wire:init to load projects lazily
@@ -50,8 +42,6 @@ new class extends Component {
 
     public function save()
     {
-        // set saving flag so frontend can react immediately
-        $this->isSaving = true;
         $this->showToast = false;
 
         // basic validation: only letters A-Z allowed
@@ -71,50 +61,28 @@ new class extends Component {
             'path' => 'projects/' . Auth::id() . '/' . Str::slug($this->projectName) . '/',
         ]);
 
+        $this->dispatch('close-modal')->to(ref: 'addNewProjectModal');
+
         // reload projects table
         $this->loadProjects();
 
         // reset form fields
         $this->projectName = '';
-        $this->slug = null;
-
-        // notify frontend to close modal by setting entangled flag
-        $this->closeModal = true;
 
         // show toast success
         $this->showToast = true;
-
-        // reset server saving flag
-        $this->isSaving = false;
     }
 };
 ?>
 
-<div x-data="{ openAddNewProjectModal: false, projectName: @entangle('projectName').defer, slug: @entangle('slug').defer, closeModal: @entangle('closeModal'), showToast: @entangle('showToast'), isSaving: false }" x-init="$watch('closeModal', value => {
-    if (value) {
-        openAddNewProjectModal = false;
-        // reset local saving flag when server signals close
-        isSaving = false;
-        setTimeout(() => { $wire.set('closeModal', false) }, 250);
-    }
-});
-
-// auto-hide toast when shown
-$watch('showToast', value => {
+<div x-data="{ showToast: @entangle('showToast') }" x-init="$watch('showToast', value => {
     if (value) {
         setTimeout(() => {
             showToast = false;
             $wire.set('showToast', false)
         }, 3500);
     }
-});
-
-$watch('openAddNewProjectModal', value => {
-    if (value) {
-        $nextTick(() => { if ($refs.projectNameInput) $refs.projectNameInput.focus() })
-    }
 });">
-    <!-- New Project Modal toggle -->
 
     <!-- Toast -->
     <div x-show="showToast" x-transition x-cloak class="fixed top-5 left-1/2 -translate-x-1/2 z-50">
@@ -134,9 +102,10 @@ $watch('openAddNewProjectModal', value => {
             </button>
         </div>
     </div>
-    <button @click="openAddNewProjectModal = true"
-        class="text-white bg-brand box-border border border-transparent hover:bg-brand-strong focus:ring-4 focus:ring-brand-medium shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none cursor-pointer"
-        type="button">
+
+    <x-button label="" type="button" @click="$dispatch('open-modal', { name: 'addNewProjectModal' })" text-white
+        bg-brand box-border border border-transparent hover:bg-brand-strong focus:ring-4 focus:ring-brand-medium
+        shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none cursor-pointer>
 
         <svg class="w-5 h-5 inline text-white dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"
             width="24" height="24" fill="none" viewBox="0 0 24 24">
@@ -145,66 +114,24 @@ $watch('openAddNewProjectModal', value => {
         </svg>
 
         Add new project
-    </button>
+    </x-button>
 
-    <!-- New Project Modal -->
-    <div x-show="openAddNewProjectModal" x-transition x-cloak
-        class="overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 flex justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full bg-black/30">
-        <div class="relative p-4 w-full max-w-2xl max-h-full" @click.outside="openAddNewProjectModal = false">
-            <!-- Modal content -->
-            <form @submit.prevent="isSaving = true; $wire.call('save')"
-                class="relative bg-neutral-primary-soft border border-default rounded-base shadow-sm p-4 md:p-6">
-                <!-- Modal header -->
-                <div class="flex items-center justify-between border-b border-default pb-4 md:pb-5">
-                    <h3 class="text-lg font-medium text-heading">
-                        Add new project
-                    </h3>
-                    <button type="button" @click="openAddNewProjectModal = false"
-                        class="text-body bg-transparent hover:bg-neutral-tertiary hover:text-heading rounded-base text-sm w-9 h-9 ms-auto inline-flex justify-center items-center">
-                        <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24"
-                            height="24" fill="none" viewBox="0 0 24 24">
-                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M6 18 17.94 6M18 18 6.06 6" />
-                        </svg>
-                        <span class="sr-only">Close modal</span>
-                    </button>
-                </div>
-                <!-- Modal body -->
-                <div class="space-y-4 md:space-y-6 py-4 md:py-6">
-                    <div class="mb-4">
-                        <label for="project-name" class="block mb-2.5 text-sm font-medium text-heading">Your project
-                            name</label>
-                        <input type="text" id="project-name" x-ref="projectNameInput" wire:model="projectName"
-                            class="text-sm rounded-base block w-full px-3 py-2.5 shadow-xs {{ $errors->has('projectName') ? 'bg-danger-soft border border-danger-subtle text-fg-danger-strong placeholder:text-fg-danger-strong focus:ring-danger focus:border-danger' : 'bg-neutral-secondary-medium border border-default-medium text-heading placeholder:text-body focus:ring-brand focus:border-brand' }}"
-                            placeholder="Landing Page" required />
-                        @error('projectName')
-                            <p class="mt-2.5 text-sm text-fg-danger-strong">
-                                {{ $message }}
-                            </p>
-                        @enderror
-                    </div>
-                </div>
-                <!-- Modal footer -->
-                <div class="flex items-center border-t border-default space-x-4 pt-4 md:pt-5">
-                    <button type="submit" wire:loading.attr="disabled" wire:target="save"
-                        class="text-white box-border border border-transparent focus:ring-4 focus:ring-brand-medium shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none"
-                        :class="isSaving ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand hover:bg-brand-strong'">
-                        <span wire:loading.remove wire:target="save">Add</span>
-                        <span wire:loading wire:target="save" class="inline-flex items-center space-x-2">
-                            <svg class="w-4 h-4 mr-2 animate-spin inline" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                    stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
-                            </svg>
-                            <span>Saving...</span>
-                        </span>
-                    </button>
-                    <button @click="openAddNewProjectModal = false" type="button"
-                        class="text-body bg-neutral-secondary-medium box-border border border-default-medium hover:bg-neutral-tertiary-medium hover:text-heading focus:ring-4 focus:ring-neutral-tertiary shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none">Cancel</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <x-modal name="addNewProjectModal" title="Add new project">
+
+        <x-form livewire action="save">
+            <x-text-input name="projectName" label="Your porject name" placeholder="Landing Page"
+                wire:model="projectName" x-ref="autofocus" required />
+
+            <div class="flex items-center gap-3">
+                <x-button type="submit" label="Add project" loading-label="Adding project..." target="save" />
+
+                <x-button type="button" label="Cancel" variant="secondary"
+                    @click="$dispatch('close-modal', { name: 'addNewProjectModal' })" />
+            </div>
+        </x-form>
+
+    </x-modal>
+
 
     {{-- data table --}}
     <div class="mt-4 relative overflow-x-auto bg-neutral-primary-soft shadow-xs rounded-base border border-default">
@@ -271,19 +198,22 @@ $watch('openAddNewProjectModal', value => {
                                 <p class="mb-4 text-sm text-gray-500">
                                     There are no projects to display.
                                 </p>
-                                <button type="button" @click="openAddNewProjectModal = true"
-                                    class="text-white bg-brand hover:bg-brand-strong box-border border border-transparent focus:ring-4 focus:ring-brand-medium shadow-xs font-medium leading-5 rounded-base text-xs px-3 py-1.5 focus:outline-none cursor-pointer">
+
+                                <x-button label="" type="button" size="sm"
+                                    @click="$dispatch('open-modal', { name: 'addNewProjectModal' })" text-white bg-brand
+                                    box-border border border-transparent hover:bg-brand-strong focus:ring-4
+                                    focus:ring-brand-medium shadow-xs font-medium leading-5 rounded-base text-sm px-4
+                                    py-2.5 focus:outline-none cursor-pointer>
 
                                     <svg class="w-5 h-5 inline text-white dark:text-white" aria-hidden="true"
-                                        xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-                                        fill="none" viewBox="0 0 24 24">
+                                        xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none"
+                                        viewBox="0 0 24 24">
                                         <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
                                             stroke-width="2" d="M5 12h14m-7 7V5" />
                                     </svg>
 
                                     Add new project
-
-                                </button>
+                                </x-button>
 
                             </div>
 

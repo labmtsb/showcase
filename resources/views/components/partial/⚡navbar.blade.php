@@ -1,9 +1,17 @@
 <?php
 
 use Livewire\Component;
+use Illuminate\Support\Facades\Auth;
 
 new class extends Component {
-    //
+    public function logout()
+    {
+        Auth::logout();
+
+        session()->regenerate();
+
+        $this->redirectIntended(route('login'), navigate: true);
+    }
 };
 ?>
 
@@ -87,59 +95,36 @@ new class extends Component {
                                             {{ Auth::user()->email }}
                                         </p>
                                     </div>
-                                    <ul class="p-2 text-sm text-body font-medium" role="none" x-data="{ openLogoutModal: false }">
+                                    <ul class="p-2 text-sm text-body font-medium" role="none">
                                         <li>
-                                            <button @click="openLogoutModal = true"
-                                                class="inline-flex items-center w-full p-2 hover:bg-neutral-tertiary-medium hover:text-heading rounded"
-                                                role="menuitem">Sign out</button>
+                                            <button type="button" @click="$dispatch('open-modal', { name: 'logoutModal' })"
+                                                class="inline-flex items-center w-full p-2 hover:bg-neutral-tertiary-medium hover:text-heading rounded">
+                                                Sign out
+                                            </button>
                                         </li>
 
-                                        {{-- Log Out Modal  --}}
-                                        <div x-show="openLogoutModal" x-transition x-cloak
-                                            class="overflow-y-auto overflow-x-hidden fixed top-0 right-0 left-0 z-50 flex justify-center items-center w-full md:inset-0 h-[calc(100%-1rem)] max-h-full bg-black/30">
-                                            <div class="relative p-4 w-full max-w-2xl max-h-full">
-                                                <!-- Modal content -->
-                                                <div @click.outside="openLogoutModal = false"
-                                                    class="relative bg-neutral-primary-soft border border-default rounded-base shadow-sm p-4 md:p-6">
-                                                    <!-- Modal header -->
-                                                    <div
-                                                        class="flex items-center justify-between border-b border-default pb-4 md:pb-5">
-                                                        <h3 class="text-lg font-medium text-heading">
-                                                            Sign out form account
-                                                        </h3>
-                                                        <button type="button" @click="openLogoutModal = false"
-                                                            class="text-body bg-transparent hover:bg-neutral-tertiary hover:text-heading rounded-base text-sm w-9 h-9 ms-auto inline-flex justify-center items-center">
-                                                            <svg class="w-5 h-5" aria-hidden="true"
-                                                                xmlns="http://www.w3.org/2000/svg" width="24"
-                                                                height="24" fill="none" viewBox="0 0 24 24">
-                                                                <path stroke="currentColor" stroke-linecap="round"
-                                                                    stroke-linejoin="round" stroke-width="2"
-                                                                    d="M6 18 17.94 6M18 18 6.06 6" />
-                                                            </svg>
-                                                            <span class="sr-only">Close modal</span>
-                                                        </button>
-                                                    </div>
+                                        <x-modal name="logoutModal" title="Sign out from your account"
+                                            description="You will need to sign in again to access your account."
+                                            size="md">
+                                            <p class="leading-relaxed text-body mb-3">
 
-                                                    <!-- Modal body -->
-                                                    <div class="space-y-4 md:space-y-6 py-4 md:py-6">
-                                                        <p class="leading-relaxed text-body">
-                                                            Sign out from yout account.
-                                                        </p>
+                                                Are you sure you want to sign out?
+                                            </p>
 
-                                                    </div>
+                                            <div class="flex items-center gap-3">
 
-                                                    <!-- Modal footer -->
-                                                    <div
-                                                        class="flex items-center border-t border-default space-x-4 pt-4 md:pt-5">
-                                                        <a href="{{ route('logout') }}"
-                                                            class="text-white bg-danger box-border border border-transparent hover:bg-danger-strong focus:ring-4 focus:ring-danger-medium shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none">Sign
-                                                            Out</a>
-                                                        <button @click="openLogoutModal = false"
-                                                            class="text-body bg-neutral-secondary-medium box-border border border-default-medium hover:bg-neutral-tertiary-medium hover:text-heading focus:ring-4 focus:ring-neutral-tertiary shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-2.5 focus:outline-none">Cancel</button>
-                                                    </div>
-                                                </div>
+                                                <x-form livewire action="logout">
+                                                    <x-button type="submit" label="Sign Out" loading-label="Signing out..."
+                                                        variant="danger" target="logout" />
+                                                </x-form>
+
+                                                <x-button type="button" label="Cancel" variant="secondary"
+                                                    @click="$dispatch('close-modal', { name: 'logoutModal' })" />
+
                                             </div>
-                                        </div>
+
+                                        </x-modal>
+
                                     </ul>
                                 </div>
                             </div>

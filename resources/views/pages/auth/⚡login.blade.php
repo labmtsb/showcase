@@ -12,17 +12,12 @@ new class extends Component {
     public string $password = '';
     public bool $remember = false;
 
-    protected function rules()
-    {
-        return [
-            'email' => ['required', 'email'],
-            'password' => ['required', 'min:5'],
-        ];
-    }
-
     public function login()
     {
-        $this->validate();
+        $this->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'min:5'],
+        ]);
 
         $attempt = Auth::attempt(
             [
@@ -43,7 +38,7 @@ new class extends Component {
 
         session()->regenerate();
 
-        $this->redirectIntended(route('home'), true);
+        $this->redirectIntended(route('home'), navigate: true);
     }
 
     public function rendering($view)

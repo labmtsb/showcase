@@ -41,7 +41,7 @@
     {{ $attributes->class([
         'text-white box-border border border-transparent shadow-xs',
         'font-medium leading-5 rounded-base focus:outline-none focus:ring-4',
-        'transition-colors inline-flex items-center justify-center',
+        'transition-colors inline-flex items-center justify-center cursor-pointer',
         'cursor-not-allowed opacity-60' => $disabled,
         $variantClass,
         $sizeClass,
@@ -69,4 +69,6 @@
     @else
         {{ $label }}
     @endif
+
+    {{ $slot }}
 </button>
