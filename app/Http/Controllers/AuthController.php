@@ -34,9 +34,12 @@ class AuthController extends Controller
         if ($attempt) {
             return redirect()->intended('home');
         } else {
-            $msg = 'Invalid email or password.';
+            $res = [
+                'type' => 'error',
+                'msg'  => 'Invalid email or password.',
+            ];
 
-            return redirect()->route('login')->withInput()->with('response', $msg);
+            return redirect()->route('login')->withInput()->with('response', $res);
         }
 
     }
@@ -47,6 +50,12 @@ class AuthController extends Controller
     public function logout()
     {
         Auth::logout();
-        return redirect()->route('login');
+
+        $res = [
+            'type' => 'success',
+            'msg'  => 'Signed out.',
+        ];
+
+        return redirect()->route('login')->with('response', $res);
     }
 }

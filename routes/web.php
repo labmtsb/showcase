@@ -5,7 +5,9 @@ use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::group(['middleware' => ['guest']], function () {
-    Route::get('/', [AuthController::class, 'index'])->name('login');
+    // Route::get('/', [AuthController::class, 'index'])->name('login');
+    Route::livewire('/', 'pages::auth.login')->name('login');
+
     Route::post('/login', [AuthController::class, 'login'])->name('attempt_login');
 });
 
