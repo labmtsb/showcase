@@ -5,6 +5,7 @@ use App\Models\Project;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 new class extends Component {
     public $projectName = '';
@@ -22,12 +23,19 @@ new class extends Component {
             ],
         );
 
+        $path = 'projects/' . Auth::id() . '/' . Str::slug($this->projectName) . '/';
+
         $project = Project::create([
             'user_id' => Auth::id(),
             'project_name' => $this->projectName,
             'slug' => Str::slug($this->projectName),
-            'path' => 'projects/' . Auth::id() . '/' . Str::slug($this->projectName) . '/',
+            'path' => $path,
         ]);
+
+        // buat folder project di storage
+        if (!Storage::disk('local')->exists($path)) {
+            Storage::disk('local')->makeDirectory($path);
+        }
 
         $this->reset(['projectName']);
 

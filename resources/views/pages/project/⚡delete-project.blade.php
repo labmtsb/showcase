@@ -23,6 +23,12 @@ new class extends Component {
     {
         $project = Project::where('user_id', Auth::id())->findOrFail($this->projectToDelete);
 
+        $path = 'projects/' . Auth::id() . '/' . $project->slug . '/';
+
+        if (Storage::disk('local')->exists($path)) {
+            Storage::disk('local')->deleteDirectory($path);
+        }
+
         $project->delete();
 
         $this->projectToDelete = null;
