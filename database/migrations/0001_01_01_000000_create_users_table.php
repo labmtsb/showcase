@@ -19,6 +19,7 @@ return new class extends Migration
             $table->string('nis', 15)->unique()->nullable();
             $table->enum('role', ['admin', 'user'])->default('user');
             $table->string('password');
+            $table->string('avatar', 64)->default('storage/avatars/8.svg');
             $table->timestamp('email_verified_at')->nullable();
             $table->rememberToken();
             $table->timestamps();

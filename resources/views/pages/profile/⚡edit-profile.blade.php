@@ -28,13 +28,16 @@ new class extends Component {
 
         $user = Auth::user();
 
-        // $user->update([
-        //     'username' => Hash::make($this->username),
-        // ]);
+        $user->update([
+            'email' => $this->email,
+            'username' => $this->username,
+        ]);
 
         $this->reset(['email', 'username']);
 
         $this->fillData();
+
+        $this->dispatch('profile-updated');
 
         $this->dispatch('close-modal')->to(ref: 'editProfileModal');
 

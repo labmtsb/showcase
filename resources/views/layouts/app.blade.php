@@ -41,26 +41,18 @@
 
     <livewire:partial.sidebar />
 
-    @auth
-        <div class="p-4 sm:ml-64 mt-14">
+    <main class="p-4 sm:ml-64 mt-14" wire:transition.navigate="content">
 
-            <livewire:partial.breadcrumb :breadcrumb='$breadcrumb ?? []' />
+        <livewire:partial.breadcrumb :breadcrumb='$breadcrumb ?? []' />
 
-            {{ $slot }}
+        {{ $slot }}
 
-        </div>
+    </main>
 
-        <x-toast placement="top-right" variant="success" duration="4000" :dismissible="true" :progress="true" :show-icon="true"
-            max="5" width="sm" />
-    @endauth
-
-    @guest
-        <div class="w-full h-screen flex flex-col items-center justify-center gap-4">
-
-            {{ $slot }}
-
-        </div>
-    @endguest
+    @persist('toast')
+        <x-toast placement="top-right" variant="success" duration="4000" :dismissible="true" :progress="true"
+            :show-icon="true" max="5" width="sm" />
+    @endpersist
 
     @livewireScripts
 </body>

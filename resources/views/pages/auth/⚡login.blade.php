@@ -2,6 +2,7 @@
 
 use Livewire\Component;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\Auth;
 
 new class extends Component {
@@ -39,6 +40,11 @@ new class extends Component {
         session()->regenerate();
 
         $this->redirectIntended(route('home'), navigate: true);
+    }
+
+    public function render()
+    {
+        return $this->view()->layout('layouts::guest');
     }
 
     public function rendering($view)
