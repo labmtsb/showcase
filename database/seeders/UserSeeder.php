@@ -29,6 +29,7 @@ class UserSeeder extends Seeder
                 "name"     => "User",
                 "email"    => "user@lab.net",
                 "username" => "user5758",
+                "nis"      => "123456789",
                 "role"     => "user",
                 "password" => Hash::make('user88'),
             ]);

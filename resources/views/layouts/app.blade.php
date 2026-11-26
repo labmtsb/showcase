@@ -49,6 +49,9 @@
             {{ $slot }}
 
         </div>
+
+        <x-toast placement="top-right" variant="success" duration="4000" :dismissible="true" :progress="true" :show-icon="true"
+            max="5" width="sm" />
     @endauth
 
     @guest

@@ -11,4 +11,7 @@ Route::group(['middleware' => ['auth']], function () {
     Route::livewire('/home', 'pages::home.show-home')->name('home');
 
     Route::livewire('/projects', 'pages::project.show-project')->name('projects');
+
+    Route::livewire('/profile', 'pages::profile.show-profile')->name('profile');
+
 });

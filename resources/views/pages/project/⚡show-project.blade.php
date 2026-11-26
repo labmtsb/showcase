@@ -11,19 +11,9 @@ new class extends Component {
 
     public array $breadcrumb = [['name' => 'Projects', 'url' => '#']];
 
-    /**
-     * Projects collection for the current user
-     * null until loaded via wire:init for lazy loading
-     */
     public $projects = null;
 
-    /**
-     * Form data project
-     */
     public $projectName = '';
-
-    // toast flag to show success message
-    public $showToast = false;
 
     /**
      * Called by wire:init to load projects lazily
@@ -43,18 +33,10 @@ new class extends Component {
 
     public function save()
     {
-        $this->showToast = false;
-
         // basic validation: only letters A-Z allowed
         $this->validate(
             [
-                'projectName' => [
-                    'required',
-                    'string',
-                    'max:125',
-                    'regex:/^[A-Za-z\s]+$/',
-                    Rule::unique('projects', 'project_name')->where(fn ($query) => $query->where('user_id', Auth::id())),
-                ],
+                'projectName' => ['required', 'string', 'max:125', 'regex:/^[A-Za-z\s]+$/', Rule::unique('projects', 'project_name')->where(fn($query) => $query->where('user_id', Auth::id()))],
             ],
             [
                 'projectName.regex' => 'Project name may only contain letters A-Z (no numbers or symbols).',
@@ -71,45 +53,16 @@ new class extends Component {
 
         $this->dispatch('close-modal')->to(ref: 'addNewProjectModal');
 
-        // reload projects table
         $this->loadProjects();
 
-        // reset form fields
-        $this->projectName = '';
+        $this->reset(['projectName']);
 
-        // show toast success
-        $this->showToast = true;
+        $this->dispatch('toast', variant: 'success', title: 'Success!', message: 'Add new project successfully.');
     }
 };
 ?>
 
-<div x-data="{ showToast: @entangle('showToast') }" x-init="$watch('showToast', value => {
-    if (value) {
-        setTimeout(() => {
-            showToast = false;
-            $wire.set('showToast', false)
-        }, 3500);
-    }
-});">
-
-    <!-- Toast -->
-    <div x-show="showToast" x-transition x-cloak class="fixed top-5 left-1/2 -translate-x-1/2 z-50">
-        <div id="toast-default"
-            class="flex items-center w-full max-w-xs p-4 text-body bg-neutral-primary-soft rounded-base shadow-xs border border-default"
-            role="alert">
-            <div class="ms-2.5 text-sm text-gray-500 dark:text-white">Project saved successfully.</div>
-            <button type="button" @click="showToast = false; $wire.set('showToast', false)"
-                class="ms-auto flex items-center justify-center text-body hover:text-heading bg-transparent box-border border border-transparent hover:bg-neutral-secondary-medium focus:ring-4 focus:ring-neutral-tertiary font-medium leading-5 rounded text-sm h-8 w-8 focus:outline-none"
-                aria-label="Close">
-                <span class="sr-only">Close</span>
-                <svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
-                    fill="none" viewBox="0 0 24 24">
-                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M6 18 17.94 6M18 18 6.06 6" />
-                </svg>
-            </button>
-        </div>
-    </div>
+<div>
 
     <x-button label="" type="button" @click="$dispatch('open-modal', { name: 'addNewProjectModal' })" text-white
         bg-brand box-border border border-transparent hover:bg-brand-strong focus:ring-4 focus:ring-brand-medium

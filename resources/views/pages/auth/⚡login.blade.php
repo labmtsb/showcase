@@ -56,6 +56,8 @@ new class extends Component {
         <x-form livewire action="login"
             class="block w-100 bg-neutral-primary-soft block p-6 border border-default rounded-base shadow-xs">
 
+            <h5 class="text-xl font-semibold text-heading mb-6">Sign in to showcase panel</h5>
+
             @if (session('response'))
                 <x-alert :type="session('response')['type']" dismissible>
                     {{ session('response')['msg'] }}
