@@ -26,6 +26,11 @@ new class extends Component {
                 </div>
 
                 <div class="flex flex-col py-3">
+                    <div class="h-4 w-16 bg-neutral-secondary-medium rounded mb-2"></div>
+                    <div class="h-6 w-32 bg-neutral-secondary-medium rounded"></div>
+                </div>
+
+                <div class="flex flex-col py-3">
                     <div class="h-4 w-24 bg-neutral-secondary-medium rounded mb-2"></div>
                     <div class="h-6 w-64 bg-neutral-secondary-medium rounded"></div>
                 </div>
@@ -41,6 +46,11 @@ new class extends Component {
             <div class="flex flex-col pb-3">
                 <dt class="mb-1 text-body">NIS</dt>
                 <dd class="text-lg font-medium">{{ Auth::user()->nis ?? '' }}</dd>
+            </div>
+
+            <div class="flex flex-col pb-3">
+                <dt class="mb-1 text-body">Name</dt>
+                <dd class="text-lg font-medium">{{ Auth::user()->name }}</dd>
             </div>
 
             <div class="flex flex-col py-3">

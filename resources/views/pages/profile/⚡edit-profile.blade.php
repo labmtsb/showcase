@@ -59,6 +59,11 @@ new class extends Component {
                 <x-slot:hint>You not allowed to change your NIS.</x-slot:hint>
             </x-text-input>
 
+            <x-text-input name="name" label="Your name" value="{{ Auth::user()->name ?? '' }}"
+                class="cursor-not-allowed" disabled readonly>
+                <x-slot:hint>You not allowed to change your name.</x-slot:hint>
+            </x-text-input>
+
             <x-text-input name="email" label="Your new email" wire:model="email" x-ref="autofocus" required />
 
             <x-text-input name="username" label="Your username" wire:model="username" required />
