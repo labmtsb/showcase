@@ -31,7 +31,7 @@ new class extends Component {
 ?>
 
 <div>
-    <x-button variant="primary" label="Change password"
+    <x-button variant="danger" label="Change password"
         @click="$dispatch('open-modal', { name: 'editPasswordModal' })"></x-button>
 
     <x-modal name="editPasswordModal" title="Change password" description="You will need to fill the current password."

@@ -5,7 +5,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'project_name', 'slug', 'grade', 'likes', 'comments', 'path'])]
+#[Fillable(['user_id', 'project_name', 'slug', 'grade', 'likes', 'comments', 'visibility', 'entry_point', 'share_token_hash', 'path'])]
 class Project extends Model
 {
     //

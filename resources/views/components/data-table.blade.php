@@ -112,7 +112,7 @@
 
             {{-- Header --}}
             <thead @class([
-                'text-sm text-body bg-neutral-secondary-soft border-b border-default',
+                'text-sm dark:text-white text-dark bg-neutral-secondary-soft border-b border-default',
                 $theadClass,
             ])>
                 <tr>

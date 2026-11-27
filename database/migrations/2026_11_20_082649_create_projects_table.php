@@ -26,6 +26,10 @@ return new class extends Migration
             $table->unsignedInteger('likes')->default(0);
             $table->unsignedInteger('comments')->default(0);
 
+            $table->enum('visibility', ['public', 'private', 'unlisted'])->default('public');
+            $table->string('entry_point')->default('index.html');
+            $table->uuid('share_token_hash')->unique()->nullable();
+
             $table->string('path', 225);
 
             $table->timestamps();

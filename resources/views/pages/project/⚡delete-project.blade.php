@@ -8,13 +8,17 @@ use Illuminate\Support\Facades\Auth;
 new class extends Component {
     public ?int $projectToDelete = null;
 
+    public ?string $projectName = null;
+
     #[On('confirm-delete-project')]
-    public function confirmDelete($projectId)
+    public function confirmDelete($projectId, $projectName)
     {
         // Verify project ownership.
         Project::where('user_id', Auth::id())->findOrFail($projectId);
 
         $this->projectToDelete = $projectId;
+
+        $this->projectName = $projectName;
 
         $this->dispatch('open-modal', name: 'deleteProjectModal');
     }
@@ -46,6 +50,13 @@ new class extends Component {
     {{-- Delete confirmation modal --}}
     <x-modal name="deleteProjectModal" title="Delete project" description="This action cannot be undone." size="md">
         <p class="leading-relaxed text-body mb-5">
+            <span class="text-dark dark:text-white block">
+                Project to delete:
+                <span
+                    class="bg-warning-soft text-fg-warning text-sm font-medium px-1.5 py-0.5 rounded">{{ $projectName }}
+                </span>
+            </span>
+
             Are you sure you want to delete this project?
             All associated project data may also be affected.
         </p>

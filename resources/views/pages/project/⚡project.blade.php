@@ -43,17 +43,25 @@ new class extends Component {
             'skeletonWidth' => '100px',
         ],
         [
-            'label' => 'Grade',
-            'field' => 'grade',
+            'label' => 'Entry point',
+            'field' => 'entry_point',
         ],
         [
-            'label' => 'Likes',
-            'field' => 'likes',
+            'label' => 'Created at',
+            'field' => 'created_at',
         ],
-        [
-            'label' => 'Comments',
-            'field' => 'comments',
-        ],
+        // [
+        //     'label' => 'Grade',
+        //     'field' => 'grade',
+        // ],
+        // [
+        //     'label' => 'Likes',
+        //     'field' => 'likes',
+        // ],
+        // [
+        //     'label' => 'Comments',
+        //     'field' => 'comments',
+        // ],
     ]" :loading="$projects === null" :row-actions="fn($project) => view('pages.project.partials.actions', ['project' => $project])" actions-label="Actions"
         skeleton="3" empty-title="No projects found" empty-description="Start by creating your first project." hoverable>
 
