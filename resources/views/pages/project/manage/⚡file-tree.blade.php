@@ -874,6 +874,33 @@ new class extends Component {
     {
         $this->resetValidation('archive');
     }
+
+    public function openFileEditor(string $path): void
+    {
+        $path = str_replace('\\', '/', $path);
+
+        abort_if(in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true), 403);
+
+        $path = trim($path, '/');
+
+        abort_unless($this->isInsideRoot($path), 403);
+        abort_if($path === $this->rootPath, 403);
+
+        $disk = Storage::disk('local');
+
+        abort_unless($disk->exists($path) && !$disk->directoryExists($path), 404);
+
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+        $editableExtensions = ['html', 'htm', 'css', 'scss', 'sass', 'less', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue', 'php', 'phtml', 'py', 'json', 'xml', 'svg', 'md', 'txt', 'yml', 'yaml', 'toml', 'ini', 'sql', 'sh', 'bash', 'java', 'c', 'h', 'cpp', 'cs', 'go', 'rs', 'rb', 'dart', 'kt', 'swift'];
+
+        abort_unless(in_array($extension, $editableExtensions, true), 422, 'Format file tidak didukung oleh text editor.');
+
+        // Batasi ukuran file yang dibuka.
+        abort_if($disk->size($path) > 2 * 1024 * 1024, 413, 'Ukuran file terlalu besar untuk dibuka.');
+
+        $this->dispatch('open-project-file-editor', path: $path);
+    }
 };
 ?>
 
@@ -1469,6 +1496,9 @@ new class extends Component {
         </div>
     </div>
 
+    {{-- modal editor --}}
+    <livewire:pages::project.manage.editor :root-path="$rootPath" />
+
 
 
     {{-- Column Header --}}
@@ -1543,10 +1573,63 @@ new class extends Component {
                             wire:confirm="Ekstrak {{ $node['name'] }} ke folder baru di direktori ini?"
                             wire:loading.attr="disabled" wire:target="extractArchive" title="Extract archive"
                             class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-purple-50 hover:text-purple-600 dark:text-gray-400 dark:hover:bg-purple-500/10 dark:hover:text-purple-400">
-                            <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                    d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3a1 1 0 001 1h14a1 1 0 001-1v-3" />
-                            </svg>
+
+                            <x-lucide-square-arrow-up-right-exit class="w-4 h-4" />
+                        </button>
+                    @endif
+
+                    {{-- edit --}}
+                    @if (
+                        $node['type'] === 'file' &&
+                            in_array(strtolower($node['extension'] ?? ''),
+                                [
+                                    'html',
+                                    'htm',
+                                    'css',
+                                    'scss',
+                                    'sass',
+                                    'less',
+                                    'js',
+                                    'mjs',
+                                    'cjs',
+                                    'ts',
+                                    'tsx',
+                                    'jsx',
+                                    'vue',
+                                    'php',
+                                    'phtml',
+                                    'py',
+                                    'json',
+                                    'xml',
+                                    'svg',
+                                    'md',
+                                    'txt',
+                                    'yml',
+                                    'yaml',
+                                    'toml',
+                                    'ini',
+                                    'sql',
+                                    'sh',
+                                    'bash',
+                                    'java',
+                                    'c',
+                                    'h',
+                                    'cpp',
+                                    'cs',
+                                    'go',
+                                    'rs',
+                                    'rb',
+                                    'dart',
+                                    'kt',
+                                    'swift',
+                                ],
+                                true))
+                        <button type="button" wire:click="openFileEditor(@js($node['path']))"
+                            wire:loading.attr="disabled" wire:target="openFileEditor"
+                            title="Edit {{ $node['name'] }}"
+                            class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+
+                            <x-lucide-square-pen class="w-4 h-4" />
                         </button>
                     @endif
 
@@ -1554,30 +1637,24 @@ new class extends Component {
                     <button type="button" wire:click="startRename(@js($node['path']))"
                         wire:loading.attr="disabled" wire:target="startRename" title="Rename {{ $node['type'] }}"
                         class="col-start-2 col-end-2 inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-emerald-50 hover:text-emerald-600 dark:text-gray-400 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400">
-                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="m16.862 4.487 1.687-1.687a2.121 2.121 0 013 3l-1.687 1.687m-3-3L7.5 14.5V17h2.5l7.362-7.362m-3-3L16.862 4.487M19 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6" />
-                        </svg>
+
+                        <x-lucide-pencil-line class="w-4 h-4" />
                     </button>
 
                     {{-- Copy --}}
                     <button type="button" wire:click="startTransfer(@js($node['path']), 'copy')"
                         wire:loading.attr="disabled" wire:target="startTransfer" title="Copy {{ $node['type'] }}"
                         class="col-start-3 col-end-3 inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
-                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M8 8V5a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3M5 8h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2z" />
-                        </svg>
+
+                        <x-lucide-copy class="w-4 h-4" />
                     </button>
 
                     {{-- Move --}}
                     <button type="button" wire:click="startTransfer(@js($node['path']), 'move')"
                         wire:loading.attr="disabled" wire:target="startTransfer" title="Move {{ $node['type'] }}"
                         class="col-start-4 col-end-4 inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:text-gray-400 dark:hover:bg-amber-500/10 dark:hover:text-amber-400">
-                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 12h16m-6-6 6 6-6 6" />
-                        </svg>
+
+                        <x-lucide-scissors class="w-4 h-4" />
                     </button>
 
                     {{-- Delete --}}
@@ -1589,11 +1666,8 @@ new class extends Component {
                         wire:confirm="Yakin ingin menghapus {{ $node['name'] }}? {{ $node['type'] === 'folder' ? 'Seluruh isi folder juga akan dihapus.' : '' }}"
                         wire:loading.attr="disabled" wire:target="deleteItem" title="Delete {{ $node['type'] }}"
                         class="col-start-5 col-end-5 inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-red-100 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-400">
-                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                d="M6 7h12m-10 0V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m-9 0 1 13h8l1-13M10 11v5m4-5v5" />
-                        </svg>
+
+                        <x-lucide-trash class="w-4 h-4" />
                     </button>
 
                 </div>
