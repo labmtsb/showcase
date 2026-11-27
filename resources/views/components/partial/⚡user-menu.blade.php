@@ -52,15 +52,15 @@ new class extends Component {
                             Are you sure you want to sign out?
                         </p>
 
-                        <div class="flex items-center gap-3">
+                        <div class="flex items-center justify-end gap-3">
+
+                            <x-button type="button" label="Cancel" variant="secondary"
+                                @click="$dispatch('close-modal', { name: 'logoutModal' })" />
 
                             <x-form livewire action="logout">
                                 <x-button type="submit" label="Sign Out" loading-label="Signing out..."
                                     variant="danger" target="logout" />
                             </x-form>
-
-                            <x-button type="button" label="Cancel" variant="secondary"
-                                @click="$dispatch('close-modal', { name: 'logoutModal' })" />
 
                         </div>
 

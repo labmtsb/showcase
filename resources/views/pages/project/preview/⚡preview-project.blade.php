@@ -52,7 +52,8 @@ new class extends Component {
     </div>
 
     <div class="w-full h-screen">
-        <iframe src="{{ route('project.preview', $params) }}" title="Project Preview" frameborder="0"></iframe>
+        <iframe src="{{ route('project.preview', $params) }}" class="w-full h-screen" title="Project Preview"
+            frameborder="0"></iframe>
     </div>
 
 
