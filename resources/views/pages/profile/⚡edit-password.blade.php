@@ -48,10 +48,10 @@ new class extends Component {
                 wire:model="password_confirmation" required />
 
 
-            <div class="flex items-center gap-3">
-                <x-button type="submit" label="Update" loading-label="Updating..." variant="primary" target="update" />
+            <div class="flex items-center justify-end gap-3">
                 <x-button type="button" label="Cancel" variant="secondary"
                     @click="$dispatch('close-modal', { name: 'editPasswordModal' })" />
+                <x-button type="submit" label="Update" loading-label="Updating..." variant="primary" target="update" />
             </div>
         </x-form>
 

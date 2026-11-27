@@ -64,11 +64,12 @@ new class extends Component {
             <x-text-input name="projectName" label="Your porject name" placeholder="Landing Page" wire:model="projectName"
                 x-ref="autofocus" required />
 
-            <div class="flex items-center gap-3">
-                <x-button type="submit" label="Add project" loading-label="Adding project..." target="save" />
-
+            <div class="flex items-center justify-end gap-3">
                 <x-button type="button" label="Cancel" variant="secondary"
                     @click="$dispatch('close-modal', { name: 'addNewProjectModal' })" />
+
+                <x-button type="submit" label="Add project" loading-label="Adding project..." target="save" />
+
             </div>
         </x-form>
 

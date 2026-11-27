@@ -12,11 +12,33 @@ new class extends Component {
     #[Locked]
     public string $rootPath;
 
+    #[Locked]
+    public string $currentDirectory;
+
+    #[Locked]
+    public ?string $transferSourcePath = null;
+
+    #[Locked]
+    public ?string $transferSourceType = null;
+
+    #[Locked]
+    public ?string $transferOperation = null;
+
+    #[Locked]
+    public string $transferDestination = '';
+
+    #[Locked]
+    public ?string $renamePath = null;
+
+    public string $renameName = '';
+
     public array $expanded = [];
 
     public array $uploads = [];
 
-    public ?string $successMessage = null;
+    public string $newItemType = 'file';
+
+    public string $newItemName = '';
 
     public function mount(string $path): void
     {
@@ -29,6 +51,14 @@ new class extends Component {
         abort_unless($disk->directoryExists($path), 404);
 
         $this->rootPath = $path;
+
+        $this->currentDirectory = $path;
+
+        $this->rootPath = $path;
+
+        $this->currentDirectory = $path;
+
+        $this->transferDestination = $path;
     }
 
     public function toggleFolder(string $path): void
@@ -36,13 +66,29 @@ new class extends Component {
         abort_unless($this->isInsideRoot($path), 403);
 
         $disk = Storage::disk('local');
-
         abort_unless($disk->directoryExists($path), 404);
 
         if (isset($this->expanded[$path])) {
             unset($this->expanded[$path]);
+
+            // Jika folder yang ditutup adalah direktori aktif
+            // atau merupakan induk dari direktori aktif,
+            // kembalikan direktori aktif ke folder induknya.
+            if ($this->currentDirectory === $path || str_starts_with($this->currentDirectory, $path . '/')) {
+                $this->currentDirectory = dirname($path);
+            }
+
+            // Tutup juga seluruh subfolder di dalamnya.
+            foreach (array_keys($this->expanded) as $expandedPath) {
+                if (str_starts_with($expandedPath, $path . '/')) {
+                    unset($this->expanded[$expandedPath]);
+                }
+            }
         } else {
             $this->expanded[$path] = true;
+
+            // Jadikan folder yang dibuka sebagai direktori aktif.
+            $this->currentDirectory = $path;
         }
     }
 
@@ -74,12 +120,59 @@ new class extends Component {
         return round($bytes, 2) . ' TB';
     }
 
-    private function buildTree(string $directory, int $depth = 0): array
+    public function with(): array
+    {
+        return [
+            'nodes' => $this->getCurrentDirectoryItems(),
+            'breadcrumbs' => $this->getBreadcrumbs(),
+
+            'transferBreadcrumbs' => $this->getTransferBreadcrumbs(),
+            'transferDirectories' => $this->getTransferDirectories(),
+        ];
+    }
+
+    public function navigateTo(string $path): void
+    {
+        $path = str_replace('\\', '/', $path);
+
+        // Tolak path traversal.
+        abort_if(in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true), 403);
+
+        $path = trim($path, '/');
+
+        // Pastikan tujuan tidak keluar dari root project.
+        abort_unless($this->isInsideRoot($path), 403);
+
+        $disk = Storage::disk('local');
+
+        abort_unless($disk->directoryExists($path), 404);
+
+        $this->currentDirectory = $path;
+    }
+
+    public function goUp(): void
+    {
+        // Tidak boleh keluar dari root project.
+        if ($this->currentDirectory === $this->rootPath) {
+            return;
+        }
+
+        $parent = dirname($this->currentDirectory);
+
+        // Pengaman tambahan.
+        if (!$this->isInsideRoot($parent)) {
+            $parent = $this->rootPath;
+        }
+
+        $this->currentDirectory = $parent;
+    }
+
+    private function getCurrentDirectoryItems(): array
     {
         $disk = Storage::disk('local');
 
-        $directories = $disk->directories($directory);
-        $files = $disk->files($directory);
+        $directories = $disk->directories($this->currentDirectory);
+        $files = $disk->files($this->currentDirectory);
 
         usort($directories, fn($a, $b) => strcasecmp(basename($a), basename($b)));
 
@@ -87,18 +180,12 @@ new class extends Component {
 
         $nodes = [];
 
-        foreach ($directories as $folder) {
+        foreach ($directories as $directory) {
             $nodes[] = [
-                'name' => basename($folder),
-                'path' => $folder,
+                'name' => basename($directory),
+                'path' => $directory,
                 'type' => 'folder',
-                'depth' => $depth,
-                'expanded' => isset($this->expanded[$folder]),
             ];
-
-            if (isset($this->expanded[$folder])) {
-                $nodes = array_merge($nodes, $this->buildTree($folder, $depth + 1));
-            }
         }
 
         foreach ($files as $file) {
@@ -106,7 +193,6 @@ new class extends Component {
                 'name' => basename($file),
                 'path' => $file,
                 'type' => 'file',
-                'depth' => $depth,
                 'extension' => strtolower(pathinfo($file, PATHINFO_EXTENSION)),
                 'size' => $this->formatBytes($disk->size($file)),
                 'modified' => date('d M Y H:i', $disk->lastModified($file)),
@@ -116,11 +202,135 @@ new class extends Component {
         return $nodes;
     }
 
-    public function with(): array
+    private function getBreadcrumbs(): array
     {
-        return [
-            'nodes' => $this->buildTree($this->rootPath),
+        $breadcrumbs = [
+            [
+                'name' => basename($this->rootPath),
+                'path' => $this->rootPath,
+            ],
         ];
+
+        $relativePath = trim(substr($this->currentDirectory, strlen($this->rootPath)), '/');
+
+        if ($relativePath === '') {
+            return $breadcrumbs;
+        }
+
+        $currentPath = $this->rootPath;
+
+        foreach (explode('/', $relativePath) as $segment) {
+            $currentPath .= '/' . $segment;
+
+            $breadcrumbs[] = [
+                'name' => $segment,
+                'path' => $currentPath,
+            ];
+        }
+
+        return $breadcrumbs;
+    }
+
+    private function getTransferBreadcrumbs(): array
+    {
+        $breadcrumbs = [
+            [
+                'name' => basename($this->rootPath),
+                'path' => $this->rootPath,
+            ],
+        ];
+
+        $relativePath = trim(substr($this->transferDestination, strlen($this->rootPath)), '/');
+
+        if ($relativePath === '') {
+            return $breadcrumbs;
+        }
+
+        $currentPath = $this->rootPath;
+
+        foreach (explode('/', $relativePath) as $segment) {
+            $currentPath .= '/' . $segment;
+
+            $breadcrumbs[] = [
+                'name' => $segment,
+                'path' => $currentPath,
+            ];
+        }
+
+        return $breadcrumbs;
+    }
+
+    private function getTransferDirectories(): array
+    {
+        $disk = Storage::disk('local');
+
+        $directories = $disk->directories($this->transferDestination);
+
+        $items = [];
+
+        foreach ($directories as $directory) {
+            $items[] = [
+                'name' => basename($directory),
+                'path' => $directory,
+            ];
+        }
+
+        usort($items, fn($a, $b) => strcasecmp($a['name'], $b['name']));
+
+        return $items;
+    }
+
+    public function createItem(): void
+    {
+        $this->newItemName = trim($this->newItemName);
+
+        $this->validate(
+            [
+                'newItemType' => ['required', 'in:file,folder'],
+                'newItemName' => ['required', 'string', 'max:255', 'not_regex:/[\/\\\\]/', 'not_in:.,..', 'regex:/^[^<>:"|?*\x00-\x1F]+$/u'],
+            ],
+            [
+                'newItemType.in' => 'Jenis item tidak valid.',
+                'newItemName.required' => 'Nama file atau folder wajib diisi.',
+                'newItemName.max' => 'Nama maksimal 255 karakter.',
+                'newItemName.not_regex' => 'Nama tidak boleh mengandung garis miring.',
+                'newItemName.not_in' => 'Nama tersebut tidak diperbolehkan.',
+                'newItemName.regex' => 'Nama mengandung karakter yang tidak diperbolehkan.',
+            ],
+        );
+
+        abort_unless($this->isInsideRoot($this->currentDirectory), 403);
+
+        $disk = Storage::disk('local');
+
+        abort_unless($disk->directoryExists($this->currentDirectory), 404);
+
+        $path = $this->currentDirectory . '/' . $this->newItemName;
+
+        // Jangan menimpa file atau folder yang sudah ada.
+        // abort_if($disk->exists($path) || $disk->directoryExists($path), 409, 'File atau folder dengan nama tersebut sudah ada.');
+
+        if ($disk->exists($path) || $disk->directoryExists($path)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'newItemName' => 'File atau folder dengan nama tersebut sudah ada.',
+            ]);
+        }
+
+        if ($this->newItemType === 'folder') {
+            $disk->makeDirectory($path);
+
+            $this->dispatch('toast', variant: 'success', title: 'Success!', message: 'Folder successfully created.');
+        } else {
+            // Membuat file kosong.
+            $disk->put($path, '');
+
+            $this->dispatch('toast', variant: 'success', title: 'Success!', message: 'File successfully deleted.');
+        }
+
+        $this->reset('newItemName');
+        $this->newItemType = 'file';
+
+        $this->dispatch('item-created');
     }
 
     public function uploadFiles(): void
@@ -139,14 +349,16 @@ new class extends Component {
 
         $disk = Storage::disk('local');
 
-        abort_unless($disk->directoryExists($this->rootPath), 404);
+        // Pastikan direktori tujuan masih berada di dalam root.
+        abort_unless($this->isInsideRoot($this->currentDirectory), 403);
+
+        abort_unless($disk->directoryExists($this->currentDirectory), 404);
 
         $uploadedCount = 0;
 
         foreach ($this->uploads as $file) {
             $originalName = basename($file->getClientOriginalName());
 
-            // Amankan nama file.
             $safeName = preg_replace('/[^A-Za-z0-9._-]/', '_', $originalName);
 
             $safeName = $safeName ?: Str::uuid()->toString();
@@ -154,8 +366,7 @@ new class extends Component {
             $filename = $safeName;
             $counter = 1;
 
-            // Hindari menimpa file yang sudah ada.
-            while ($disk->exists($this->rootPath . '/' . $filename)) {
+            while ($disk->exists($this->currentDirectory . '/' . $filename)) {
                 $extension = pathinfo($safeName, PATHINFO_EXTENSION);
                 $name = pathinfo($safeName, PATHINFO_FILENAME);
 
@@ -166,16 +377,275 @@ new class extends Component {
                 }
             }
 
-            $file->storeAs($this->rootPath, $filename, 'local');
+            $file->storeAs($this->currentDirectory, $filename, 'local');
 
             $uploadedCount++;
         }
 
         $this->reset('uploads');
 
-        $this->successMessage = $uploadedCount . ' file berhasil diunggah.';
+        $this->dispatch('toast', variant: 'success', title: 'Success!', message: 'file(s) successfully uploaded.');
 
         $this->dispatch('upload-completed');
+    }
+
+    public function startTransfer(string $path, string $operation): void
+    {
+        abort_unless(in_array($operation, ['copy', 'move'], true), 400);
+
+        $path = str_replace('\\', '/', $path);
+
+        abort_if(in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true), 403);
+
+        $path = trim($path, '/');
+
+        abort_unless($this->isInsideRoot($path), 403);
+        abort_if($path === $this->rootPath, 403);
+
+        $disk = Storage::disk('local');
+
+        $isDirectory = $disk->directoryExists($path);
+        $isFile = $disk->exists($path) && !$isDirectory;
+
+        abort_unless($isDirectory || $isFile, 404);
+
+        $this->transferSourcePath = $path;
+        $this->transferSourceType = $isDirectory ? 'folder' : 'file';
+        $this->transferOperation = $operation;
+        $this->transferDestination = $this->currentDirectory;
+
+        $this->resetValidation();
+
+        $this->dispatch('open-transfer-modal');
+    }
+
+    public function navigateTransferTo(string $path): void
+    {
+        $path = str_replace('\\', '/', $path);
+
+        abort_if(in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true), 403);
+
+        $path = trim($path, '/');
+
+        abort_unless($this->isInsideRoot($path), 403);
+
+        $disk = Storage::disk('local');
+
+        abort_unless($disk->directoryExists($path), 404);
+
+        $this->transferDestination = $path;
+    }
+
+    public function transferGoUp(): void
+    {
+        if ($this->transferDestination === $this->rootPath) {
+            return;
+        }
+
+        $parent = dirname($this->transferDestination);
+
+        if (!$this->isInsideRoot($parent)) {
+            $parent = $this->rootPath;
+        }
+
+        $this->transferDestination = $parent;
+    }
+
+    public function confirmTransfer(): void
+    {
+        abort_unless(in_array($this->transferOperation, ['copy', 'move'], true), 400);
+
+        abort_unless(in_array($this->transferSourceType, ['file', 'folder'], true), 400);
+
+        $source = $this->transferSourcePath;
+        $destination = $this->transferDestination;
+
+        abort_if(!$source || !$this->isInsideRoot($source), 403);
+
+        abort_if($source === $this->rootPath, 403);
+
+        abort_unless($this->isInsideRoot($destination), 403);
+
+        $disk = Storage::disk('local');
+
+        abort_unless($disk->directoryExists($destination), 404);
+
+        // Pastikan sumber masih tersedia dan tipenya belum berubah.
+        if ($this->transferSourceType === 'folder') {
+            abort_unless($disk->directoryExists($source), 404);
+        } else {
+            abort_unless($disk->exists($source) && !$disk->directoryExists($source), 404);
+        }
+
+        // Folder tidak boleh dipindahkan/disalin ke dirinya sendiri
+        // atau ke salah satu subfolder di dalamnya.
+        if ($this->transferSourceType === 'folder') {
+            abort_if($destination === $source || str_starts_with($destination, $source . '/'), 422, 'Folder tidak dapat disalin atau dipindahkan ke dalam dirinya sendiri.');
+        }
+
+        $filename = basename($source);
+        $target = $destination . '/' . $filename;
+
+        // Jangan menimpa item yang sudah ada.
+        if ($disk->exists($target) || $disk->directoryExists($target)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'transferDestination' => 'Item dengan nama yang sama sudah ada di folder tujuan.',
+            ]);
+        }
+
+        $operation = $this->transferOperation;
+
+        if ($this->transferSourceType === 'file') {
+            $success = $operation === 'copy' ? $disk->copy($source, $target) : $disk->move($source, $target);
+
+            abort_unless($success, 500, 'Gagal memproses file.');
+        } else {
+            // Copy seluruh isi folder beserta subfolder-nya.
+            $success = $disk->copyDirectory($source, $target);
+
+            abort_unless($success, 500, 'Gagal menyalin folder.');
+
+            if ($operation === 'move') {
+                // Setelah berhasil disalin, hapus folder sumber.
+                if (!$disk->deleteDirectory($source)) {
+                    // Coba batalkan hasil copy jika penghapusan sumber gagal.
+                    $disk->deleteDirectory($target);
+
+                    abort(500, 'Gagal memindahkan folder.');
+                }
+            }
+        }
+
+        $this->successMessage = $operation === 'copy' ? 'Item berhasil disalin.' : 'Item berhasil dipindahkan.';
+
+        $this->resetTransfer();
+
+        $this->dispatch('transfer-completed');
+    }
+
+    private function resetTransfer(): void
+    {
+        $this->transferSourcePath = null;
+        $this->transferSourceType = null;
+        $this->transferOperation = null;
+        $this->transferDestination = $this->currentDirectory;
+
+        $this->resetValidation();
+    }
+
+    public function startRename(string $path): void
+    {
+        $path = str_replace('\\', '/', $path);
+
+        abort_if(in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true), 403);
+
+        $path = trim($path, '/');
+
+        abort_unless($this->isInsideRoot($path), 403);
+        abort_if($path === $this->rootPath, 403);
+
+        $disk = Storage::disk('local');
+
+        $isDirectory = $disk->directoryExists($path);
+        $isFile = $disk->exists($path) && !$isDirectory;
+
+        abort_unless($isDirectory || $isFile, 404);
+
+        $this->renamePath = $path;
+        $this->renameName = basename($path);
+
+        $this->resetValidation();
+
+        $this->dispatch('open-rename-modal');
+    }
+
+    public function renameItem(): void
+    {
+        $this->renameName = trim($this->renameName);
+
+        $this->validate(
+            [
+                'renameName' => ['required', 'string', 'max:255', 'not_regex:/[\/\\\\]/', 'not_in:.,..', 'regex:/^[^<>:"|?*\x00-\x1F]+$/u'],
+            ],
+            [
+                'renameName.required' => 'Nama baru wajib diisi.',
+                'renameName.max' => 'Nama maksimal 255 karakter.',
+                'renameName.not_regex' => 'Nama tidak boleh mengandung garis miring.',
+                'renameName.not_in' => 'Nama tersebut tidak diperbolehkan.',
+                'renameName.regex' => 'Nama mengandung karakter yang tidak diperbolehkan.',
+            ],
+        );
+
+        $source = $this->renamePath;
+
+        abort_unless($source, 403);
+
+        $source = str_replace('\\', '/', $source);
+
+        abort_if(in_array('..', explode('/', $source), true) || in_array('.', explode('/', $source), true), 403);
+
+        $source = trim($source, '/');
+
+        abort_unless($this->isInsideRoot($source), 403);
+        abort_if($source === $this->rootPath, 403);
+
+        $disk = Storage::disk('local');
+
+        $isDirectory = $disk->directoryExists($source);
+        $isFile = $disk->exists($source) && !$isDirectory;
+
+        abort_unless($isDirectory || $isFile, 404);
+
+        $oldName = basename($source);
+        $newName = $this->renameName;
+
+        // Tidak perlu melakukan rename jika nama sama.
+        if ($oldName === $newName) {
+            $this->resetRename();
+            $this->dispatch('rename-completed');
+
+            return;
+        }
+
+        $parent = dirname($source);
+        $target = $parent . '/' . $newName;
+
+        // Jangan menimpa item yang sudah ada.
+        if ($disk->exists($target) || $disk->directoryExists($target)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'renameName' => 'Nama tersebut sudah digunakan.',
+            ]);
+        }
+
+        $success = $isDirectory ? $disk->move($source, $target) : $disk->move($source, $target);
+
+        abort_unless($success, 500, 'Gagal mengubah nama item.');
+
+        // Jika folder yang diubah nama merupakan direktori aktif
+        // atau induk dari direktori aktif, perbarui path-nya.
+        if ($this->currentDirectory === $source || str_starts_with($this->currentDirectory, $source . '/')) {
+            $this->currentDirectory = $target . substr($this->currentDirectory, strlen($source));
+        }
+
+        // Jika ada direktori tujuan transfer yang berada di dalam folder
+        // yang diubah nama, perbarui juga path tersebut.
+        if ($this->transferDestination === $source || str_starts_with($this->transferDestination, $source . '/')) {
+            $this->transferDestination = $target . substr($this->transferDestination, strlen($source));
+        }
+
+        $this->successMessage = 'Nama item berhasil diubah.';
+
+        $this->resetRename();
+
+        $this->dispatch('rename-completed');
+    }
+
+    private function resetRename(): void
+    {
+        $this->renamePath = null;
+        $this->renameName = '';
+
+        $this->resetValidation();
     }
 
     public function deleteItem(string $path, string $type): void
@@ -200,7 +670,7 @@ new class extends Component {
                 }
             }
 
-            $this->successMessage = 'Folder berhasil dihapus.';
+            $this->dispatch('toast', variant: 'success', title: 'Success!', message: 'Folder successfully deleted.');
 
             return;
         }
@@ -210,19 +680,206 @@ new class extends Component {
 
             $disk->delete($path);
 
-            $this->successMessage = 'File berhasil dihapus.';
+            $this->dispatch('toast', variant: 'success', title: 'Success!', message: 'file(s) successfully deleted.');
 
             return;
         }
 
         abort(400);
     }
+
+    public function extractArchive(string $path): void
+    {
+        $path = str_replace('\\', '/', $path);
+
+        abort_if(in_array('..', explode('/', $path), true) || in_array('.', explode('/', $path), true), 403);
+
+        $path = trim($path, '/');
+
+        // Pastikan arsip berada di dalam project.
+        abort_unless($this->isInsideRoot($path), 403);
+        abort_if($path === $this->rootPath, 403);
+
+        $disk = Storage::disk('local');
+
+        abort_unless($disk->exists($path) && !$disk->directoryExists($path), 404);
+
+        // Hanya mendukung ZIP.
+        abort_unless(strtolower(pathinfo($path, PATHINFO_EXTENSION)) === 'zip', 422, 'Format arsip tidak didukung.');
+
+        // Pastikan PHP ZipArchive tersedia.
+        abort_unless(class_exists(\ZipArchive::class), 500, 'Ekstensi PHP ZIP belum tersedia.');
+
+        $archivePath = $disk->path($path);
+
+        $zip = new \ZipArchive();
+
+        $opened = $zip->open($archivePath);
+
+        abort_if($opened !== true, 422, 'File ZIP tidak valid atau tidak dapat dibuka.');
+
+        $targetDirectory = dirname($path) . '/' . pathinfo($path, PATHINFO_FILENAME);
+
+        // Cegah penimpaan hasil ekstraksi sebelumnya.
+        if ($disk->exists($targetDirectory) || $disk->directoryExists($targetDirectory)) {
+            $zip->close();
+
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'archive' => 'Folder hasil ekstraksi sudah tersedia.',
+            ]);
+        }
+
+        $maxEntries = 1000;
+        $maxUncompressedSize = 100 * 1024 * 1024; // 100 MB
+
+        $entries = [];
+        $totalSize = 0;
+
+        try {
+            // Tahap pertama: validasi seluruh isi arsip.
+            if ($zip->numFiles > $maxEntries) {
+                throw new \RuntimeException('Arsip berisi terlalu banyak file.');
+            }
+
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $stat = $zip->statIndex($i);
+
+                if ($stat === false) {
+                    throw new \RuntimeException('Tidak dapat membaca informasi file ZIP.');
+                }
+
+                $entryName = $stat['name'];
+
+                // ZIP menggunakan slash sebagai pemisah direktori.
+                // Tolak backslash agar tidak menjadi separator alternatif.
+                if ($entryName === '' || str_contains($entryName, '\\') || str_contains($entryName, "\0") || str_starts_with($entryName, '/') || preg_match('/^[A-Za-z]:/', $entryName)) {
+                    throw new \RuntimeException('Arsip mengandung nama file yang tidak aman.');
+                }
+
+                $isDirectory = str_ends_with($entryName, '/');
+
+                $relativePath = $isDirectory ? rtrim($entryName, '/') : $entryName;
+
+                $segments = explode('/', $relativePath);
+
+                foreach ($segments as $segment) {
+                    if ($segment === '' || $segment === '.' || $segment === '..') {
+                        throw new \RuntimeException('Arsip mengandung path yang tidak aman.');
+                    }
+                }
+
+                // Tolak symbolic link.
+                $opsys = 0;
+                $attributes = 0;
+
+                if ($zip->getExternalAttributesIndex($i, $opsys, $attributes)) {
+                    if ($opsys === \ZipArchive::OPSYS_UNIX) {
+                        $fileType = ($attributes >> 16) & 0170000;
+
+                        if ($fileType === 0120000) {
+                            throw new \RuntimeException('Arsip mengandung symbolic link yang tidak diizinkan.');
+                        }
+                    }
+                }
+
+                $size = (int) ($stat['size'] ?? 0);
+
+                if ($size < 0) {
+                    throw new \RuntimeException('Ukuran file di dalam arsip tidak valid.');
+                }
+
+                $totalSize += $size;
+
+                if ($totalSize > $maxUncompressedSize) {
+                    throw new \RuntimeException('Ukuran total hasil ekstraksi melebihi batas 100 MB.');
+                }
+
+                $entries[] = [
+                    'name' => $entryName,
+                    'path' => $relativePath,
+                    'directory' => $isDirectory,
+                ];
+            }
+
+            // Tolak nama entry duplikat.
+            $entryNames = [];
+
+            foreach ($entries as $entry) {
+                $key = strtolower($entry['path']);
+
+                if (isset($entryNames[$key])) {
+                    throw new \RuntimeException('Arsip mengandung nama file duplikat.');
+                }
+
+                $entryNames[$key] = true;
+            }
+
+            // Buat folder tujuan.
+            $disk->makeDirectory($targetDirectory);
+
+            // Tahap kedua: ekstraksi satu per satu.
+            foreach ($entries as $entry) {
+                $destination = $targetDirectory . '/' . $entry['path'];
+
+                if ($entry['directory']) {
+                    $disk->makeDirectory($destination);
+                    continue;
+                }
+
+                $parentDirectory = dirname($destination);
+
+                if (!$disk->directoryExists($parentDirectory)) {
+                    $disk->makeDirectory($parentDirectory);
+                }
+
+                $stream = $zip->getStream($entry['name']);
+
+                if ($stream === false) {
+                    throw new \RuntimeException('Gagal membaca file di dalam arsip.');
+                }
+
+                try {
+                    $success = $disk->writeStream($destination, $stream);
+                } finally {
+                    fclose($stream);
+                }
+
+                if (!$success) {
+                    throw new \RuntimeException('Gagal mengekstrak file: ' . $entry['name']);
+                }
+            }
+
+            $zip->close();
+        } catch (\Throwable $exception) {
+            $zip->close();
+
+            // Hapus hasil ekstraksi parsial jika terjadi kegagalan.
+            if ($disk->directoryExists($targetDirectory)) {
+                $disk->deleteDirectory($targetDirectory);
+            }
+
+            report($exception);
+
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'archive' => 'Ekstraksi gagal: ' . $exception->getMessage(),
+            ]);
+        }
+
+        $this->successMessage = 'Arsip berhasil diekstrak ke folder ' . basename($targetDirectory) . '.';
+
+        $this->dispatch('archive-extracted');
+    }
+
+    public function clearArchiveError(): void
+    {
+        $this->resetValidation('archive');
+    }
 };
 ?>
 
 <div
     {{ $attributes->class([
-        'w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800',
+        'w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 overflow-x-auto',
     ]) }}>
 
     {{-- Header --}}
@@ -238,50 +895,88 @@ new class extends Component {
             </p>
         </div>
 
-        <span
-            class="inline-flex shrink-0 items-center rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-            File Explorer
-        </span>
-    </div>
-
-    {{-- Success Message --}}
-    @if ($successMessage)
-        <div class="m-4 flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-400"
-            role="alert">
-            <svg class="size-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="m5 12 4 4L19 6" />
-            </svg>
-
-            <span class="flex-1">
-                {{ $successMessage }}
-            </span>
-
-            <button type="button" wire:click="$set('successMessage', null)"
-                class="text-green-600 hover:text-green-800 dark:text-green-400">
-                <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="m6 6 12 12M18 6 6 18" />
-                </svg>
-            </button>
-        </div>
-    @endif
-
-    {{-- Upload Section --}}
-    <div class="flex justify-end p-3">
-        <button type="button" @click="$dispatch('open-upload-modal')"
-            class="inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2.5
+        {{-- Operation Section --}}
+        <div class="flex justify-end gap-2">
+            <button type="button" @click="$dispatch('open-create-modal')"
+                class="inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2.5
                text-sm font-medium text-white transition-colors
                hover:bg-blue-700 focus:outline-none focus:ring-4
                focus:ring-blue-300 dark:focus:ring-blue-800">
-            <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 16V4m0 0L8 8m4-4 4 4M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" />
-            </svg>
-            Upload Files
-        </button>
+                <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m-7-7h14" />
+                </svg>
+                Create New
+            </button>
+
+            <button type="button" @click="$dispatch('open-upload-modal')"
+                class="inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2.5
+               text-sm font-medium text-white transition-colors
+               hover:bg-blue-700 focus:outline-none focus:ring-4
+               focus:ring-blue-300 dark:focus:ring-blue-800">
+                <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 16V4m0 0L8 8m4-4 4 4M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" />
+                </svg>
+                Upload Files
+            </button>
+        </div>
     </div>
 
+    @error('archive')
+        <div class="mb-4 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+            role="alert">
+            <svg class="mt-0.5 size-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v4m0 4h.01M10.3 3.86l-8 14A2 2 0 004 21h16a2 2 0 001.7-3.14l-8-14a2 2 0 00-3.4 0z" />
+            </svg>
+
+            <div class="flex-1">
+                {{ $message }}
+            </div>
+
+            <button type="button" wire:click="clearArchiveError" class="text-red-500 hover:text-red-700">
+                <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+    @enderror
+
+    {{-- navigasi --}}
+    <div class="flex flex-wrap items-center gap-3 border-b border-gray-200 px-3 py-2 dark:border-gray-700">
+
+        {{-- Back Button --}}
+        <button type="button" wire:click="goUp" @disabled($currentDirectory === $rootPath)
+            class="inline-flex shrink-0 items-center gap-2 rounded border border-gray-100 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-80 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-700">
+
+            <x-lucide-arrow-left class="w-4 h-4" />
+        </button>
+
+        {{-- Breadcrumb --}}
+        <nav class="flex min-w-0 items-center gap-1 overflow-x-auto text-sm">
+
+            @foreach ($breadcrumbs as $index => $breadcrumb)
+                @if ($index > 0)
+                    <svg class="size-4 shrink-0 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18 6-6-6-6" />
+                    </svg>
+                @endif
+
+                @if ($loop->last)
+                    <span class="truncate font-semibold text-gray-900 dark:text-white">
+                        {{ $breadcrumb['name'] }}
+                    </span>
+                @else
+                    <button type="button" wire:click="navigateTo(@js($breadcrumb['path']))"
+                        class="shrink-0 text-gray-500 transition-colors hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400">
+                        {{ $breadcrumb['name'] }}
+                    </button>
+                @endif
+            @endforeach
+
+        </nav>
+
+    </div>
 
     {{-- modal upload --}}
     <div x-on:upload-completed.window="open = false" x-data="{ open: false }" x-on:open-upload-modal.window="open = true"
@@ -297,7 +992,7 @@ new class extends Component {
                             Upload Files
                         </h3>
                         <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                            Pilih file yang ingin ditambahkan ke project.
+                            Choose the file you want to add to the project.
                         </p>
                     </div>
 
@@ -308,6 +1003,25 @@ new class extends Component {
                                 d="M6 18 18 6M6 6l12 12" />
                         </svg>
                     </button>
+                </div>
+
+                <div
+                    class="mt-3 rounded mb-3 border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-700/50">
+                    <div class="flex items-center gap-2">
+                        <svg class="size-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor"
+                            viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 7a2 2 0 012-2h5l2 2h7a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                        </svg>
+
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                            Upload destination
+                        </span>
+                    </div>
+
+                    <p class="mt-1 break-all text-sm font-medium text-gray-800 dark:text-gray-200">
+                        {{ $currentDirectory }}
+                    </p>
                 </div>
 
                 {{-- Upload Form --}}
@@ -330,7 +1044,7 @@ new class extends Component {
                         @enderror
 
                         <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            Maksimal ukuran setiap file adalah 20 MB.
+                            The maximum size of each file is 20 MB.
                         </p>
                     </div>
 
@@ -367,9 +1081,399 @@ new class extends Component {
         </div>
     </div>
 
+    {{-- modal create item --}}
+    <div x-data="{ open: false }" x-on:open-create-modal.window="open = true" x-on:item-created.window="open = false"
+        x-on:keydown.escape.window="open = false">
+        <div x-show="open" x-cloak x-transition.opacity
+            class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-900/50 p-4"
+            @click.self="open = false">
+            <div x-show="open" x-transition
+                class="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
+                {{-- Header --}}
+                <div class="mb-5 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                            Create New
+                        </h3>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Create a new file or folder.
+                        </p>
+                    </div>
+
+                    <button type="button" @click="open = false"
+                        class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-white">
+                        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <form wire:submit="createItem">
+
+                    {{-- Item Type --}}
+                    <div class="mb-5">
+                        <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Item Type
+                        </label>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" wire:model.live="newItemType" value="file"
+                                    class="peer sr-only">
+
+                                <div
+                                    class="flex items-center justify-center gap-2 rounded-lg border border-gray-300 p-3 text-sm font-medium text-gray-600 transition-colors peer-checked:border-blue-600 peer-checked:bg-blue-50 peer-checked:text-blue-600 dark:border-gray-600 dark:text-gray-300 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500/10 dark:peer-checked:text-blue-400">
+                                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5l5 5v11a2 2 0 01-2 2z" />
+                                    </svg>
+                                    New File
+                                </div>
+                            </label>
+
+                            <label class="cursor-pointer">
+                                <input type="radio" wire:model.live="newItemType" value="folder"
+                                    class="peer sr-only">
+
+                                <div
+                                    class="flex items-center justify-center gap-2 rounded-lg border border-gray-300 p-3 text-sm font-medium text-gray-600 transition-colors peer-checked:border-blue-600 peer-checked:bg-blue-50 peer-checked:text-blue-600 dark:border-gray-600 dark:text-gray-300 dark:peer-checked:border-blue-500 dark:peer-checked:bg-blue-500/10 dark:peer-checked:text-blue-400">
+                                    <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M3 7a2 2 0 012-2h5l2 2h7a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                                    </svg>
+                                    New Folder
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    {{-- Item Name --}}
+                    <div class="mb-5">
+                        <label for="new-item-name"
+                            class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Name
+                        </label>
+
+                        <input id="new-item-name" type="text" wire:model="newItemName"
+                            placeholder="Enter file or folder name" autocomplete="off"
+                            class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+
+                        @error('newItemName')
+                            <p class="mt-2 text-sm text-red-600 dark:text-red-400">
+                                {{ $message }}
+                            </p>
+                        @enderror
+
+                        @error('newItemType')
+                            <p class="mt-2 text-sm text-red-600 dark:text-red-400">
+                                {{ $message }}
+                            </p>
+                        @enderror
+                    </div>
+
+                    {{-- Destination --}}
+                    <div
+                        class="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-700/50">
+                        <p class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                            Location
+                        </p>
+
+                        <p class="break-all text-sm font-medium text-gray-800 dark:text-gray-200">
+                            {{ $currentDirectory }}
+                        </p>
+                    </div>
+
+                    {{-- Footer --}}
+                    <div class="flex justify-end gap-3">
+                        <button type="button" @click="open = false"
+                            class="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+                            Cancel
+                        </button>
+
+                        <button type="submit" wire:loading.attr="disabled" wire:target="createItem"
+                            class="inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                            <span wire:loading.remove wire:target="createItem">
+                                Create
+                            </span>
+
+                            <span wire:loading wire:target="createItem">
+                                Creating...
+                            </span>
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {{-- modal move / copy --}}
+    <div x-data="{ open: false }" x-on:open-transfer-modal.window="open = true"
+        x-on:transfer-completed.window="open = false" x-on:keydown.escape.window="open = false">
+        <div x-show="open" x-cloak x-transition.opacity
+            class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-900/50 p-4"
+            @click.self="open = false">
+            <div x-show="open" x-transition
+                class="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
+                {{-- Header --}}
+                <div class="mb-5 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                            {{ $transferOperation === 'copy' ? 'Copy Item' : 'Move Item' }}
+                        </h3>
+
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Choose the destination directory.
+                        </p>
+                    </div>
+
+                    <button type="button" @click="open = false"
+                        class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-white">
+                        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                {{-- Source Information --}}
+                <div
+                    class="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-700/50">
+                    <p class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                        Source
+                    </p>
+
+                    <div class="flex items-center gap-2">
+                        @if ($transferSourceType === 'folder')
+                            <svg class="size-5 shrink-0 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 4a2 2 0 012-2h4l2 2h6a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V4z" />
+                            </svg>
+                        @else
+                            <svg class="size-5 shrink-0 text-blue-500" fill="none" stroke="currentColor"
+                                viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5l5 5v11a2 2 0 01-2 2z" />
+                            </svg>
+                        @endif
+
+                        <div class="min-w-0">
+                            <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">
+                                {{ basename($transferSourcePath ?? '') }}
+                            </p>
+
+                            <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                                {{ $transferSourcePath }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Destination Browser --}}
+                <div class="mb-5">
+                    <div class="mb-3 flex items-center justify-between">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Destination
+                        </label>
+
+                        <button type="button" wire:click="transferGoUp" @disabled($transferDestination === $rootPath)
+                            class="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-gray-300 dark:hover:bg-gray-700">
+                            <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="m15 19-7-7 7-7" />
+                            </svg>
+                            Back
+                        </button>
+                    </div>
+
+                    {{-- Breadcrumb --}}
+                    <div
+                        class="mb-3 flex flex-wrap items-center gap-1 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-700">
+                        @foreach ($transferBreadcrumbs as $breadcrumb)
+                            @if (!$loop->first)
+                                <svg class="size-4 shrink-0 text-gray-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="m9 18 6-6-6-6" />
+                                </svg>
+                            @endif
+
+                            @if ($loop->last)
+                                <span class="font-semibold text-gray-900 dark:text-white">
+                                    {{ $breadcrumb['name'] }}
+                                </span>
+                            @else
+                                <button type="button" wire:click="navigateTransferTo(@js($breadcrumb['path']))"
+                                    class="text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400">
+                                    {{ $breadcrumb['name'] }}
+                                </button>
+                            @endif
+                        @endforeach
+                    </div>
+
+                    {{-- Folder List --}}
+                    <div class="max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
+
+                        @forelse ($transferDirectories as $directory)
+                            <button type="button" wire:click="navigateTransferTo(@js($directory['path']))"
+                                wire:key="transfer-folder-{{ md5($directory['path']) }}"
+                                class="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700/50">
+                                <svg class="size-5 shrink-0 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M2 4a2 2 0 012-2h4l2 2h6a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V4z" />
+                                </svg>
+
+                                <span
+                                    class="min-w-0 flex-1 truncate text-sm font-medium text-gray-700 dark:text-gray-200">
+                                    {{ $directory['name'] }}
+                                </span>
+
+                                <svg class="size-4 shrink-0 text-gray-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="m9 18 6-6-6-6" />
+                                </svg>
+                            </button>
+                        @empty
+                            <div class="flex flex-col items-center justify-center py-8 text-center">
+                                <svg class="mb-2 size-8 text-gray-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                        d="M3 7a2 2 0 012-2h5l2 2h7a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
+                                </svg>
+
+                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                    No subfolders found.
+                                </p>
+                            </div>
+                        @endforelse
+
+                    </div>
+
+                    @error('transferDestination')
+                        <p class="mt-2 text-sm text-red-600 dark:text-red-400">
+                            {{ $message }}
+                        </p>
+                    @enderror
+
+                    <p class="mt-2 break-all text-xs text-gray-500 dark:text-gray-400">
+                        Selected: {{ $transferDestination }}
+                    </p>
+                </div>
+
+                {{-- Footer --}}
+                <div class="flex justify-end gap-3">
+                    <button type="button" @click="open = false"
+                        class="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+                        Cancel
+                    </button>
+
+                    <button type="button" wire:click="confirmTransfer"
+                        wire:confirm="{{ $transferOperation === 'move' ? 'Yakin ingin memindahkan item ini?' : 'Yakin ingin menyalin item ini?' }}"
+                        wire:loading.attr="disabled" wire:target="confirmTransfer"
+                        class="inline-flex items-center gap-2 rounded px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 {{ $transferOperation === 'move' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700' }}">
+                        <span wire:loading.remove wire:target="confirmTransfer">
+                            {{ $transferOperation === 'move' ? 'Move Here' : 'Copy Here' }}
+                        </span>
+
+                        <span wire:loading wire:target="confirmTransfer">
+                            Processing...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- modal rename --}}
+    <div x-data="{ open: false }" x-on:open-rename-modal.window="open = true"
+        x-on:rename-completed.window="open = false" x-on:keydown.escape.window="open = false">
+        <div x-show="open" x-cloak x-transition.opacity
+            class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-gray-900/50 p-4"
+            @click.self="open = false">
+            <div x-show="open" x-transition
+                class="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
+                {{-- Header --}}
+                <div class="mb-5 flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                            Rename Item
+                        </h3>
+
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Enter a new name for this item.
+                        </p>
+                    </div>
+
+                    <button type="button" @click="open = false"
+                        class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-white">
+                        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+
+                <form wire:submit="renameItem">
+
+                    {{-- Current Name --}}
+                    <div
+                        class="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-700/50">
+                        <p class="mb-1 text-xs font-medium text-gray-500 dark:text-gray-400">
+                            Current Name
+                        </p>
+
+                        <p class="break-all text-sm font-medium text-gray-800 dark:text-gray-200">
+                            {{ basename($renamePath ?? '') }}
+                        </p>
+                    </div>
+
+                    {{-- New Name --}}
+                    <div class="mb-5">
+                        <label for="rename-item-name"
+                            class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            New Name
+                        </label>
+
+                        <input id="rename-item-name" type="text" wire:model="renameName" autocomplete="off"
+                            placeholder="Enter new name"
+                            class="block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
+
+                        @error('renameName')
+                            <p class="mt-2 text-sm text-red-600 dark:text-red-400">
+                                {{ $message }}
+                            </p>
+                        @enderror
+                    </div>
+
+                    {{-- Footer --}}
+                    <div class="flex justify-end gap-3">
+                        <button type="button" @click="open = false"
+                            class="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
+                            Cancel
+                        </button>
+
+                        <button type="submit" wire:loading.attr="disabled" wire:target="renameItem"
+                            class="inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                            <span wire:loading.remove wire:target="renameItem">
+                                Rename
+                            </span>
+
+                            <span wire:loading wire:target="renameItem">
+                                Renaming...
+                            </span>
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+
     {{-- Column Header --}}
     <div
-        class="grid grid-cols-[minmax(0,1fr)_70px_70px_130px] gap-3 border-b border-gray-200 bg-gray-50 px-5 py-2.5 text-xs font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-700/40 dark:text-gray-400">
+        class="grid grid-cols-[minmax(0,1fr)_70px_140px_130px] gap-3 border-b border-gray-200 bg-gray-50 px-5 py-2.5 text-xs font-medium text-gray-500 dark:border-gray-700 dark:bg-gray-700/40 dark:text-gray-400">
         <span>Name</span>
         <span class="text-right">Size</span>
         <span class="text-right">Actions</span>
@@ -381,28 +1485,19 @@ new class extends Component {
 
         @forelse ($nodes as $node)
             <div wire:key="file-node-{{ md5($node['path']) }}"
-                class="grid grid-cols-[minmax(0,1fr)_70px_70px_130px] items-center gap-3 px-5 py-2.5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                class="grid grid-cols-[minmax(0,1fr)_70px_140px_130px] items-center gap-3 px-5 py-2.5 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/40">
 
                 {{-- Name --}}
-                <div class="flex min-w-0 items-center gap-2" style="padding-left: {{ $node['depth'] * 1.25 }}rem">
+                <div class="flex min-w-0 items-center gap-2">
 
                     @if ($node['type'] === 'folder')
-                        <button type="button" wire:click="toggleFolder(@js($node['path']))"
-                            class="flex min-w-0 items-center gap-2 text-left">
-
-                            <x-lucide-chevron-right
-                                class="size-4 shrink-0 text-gray-400 transition-transform duration-200 {{ $node['expanded'] ? 'rotate-90' : '' }}" />
-
-                            <svg class="size-5 shrink-0 {{ $node['expanded'] ? 'text-green-500' : 'text-yellow-500' }}"
-                                xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v1H8a3 3 0 0 0-2.8 2L3 17.5V6Z" />
-                                <path
-                                    d="M7.1 10.5A2 2 0 0 1 9 9h12a1 1 0 0 1 1 1.3l-2.1 8A2 2 0 0 1 18 20H4a1 1 0 0 1-1-1.3l4.1-8.2Z" />
+                        <button type="button" wire:click="navigateTo(@js($node['path']))"
+                            class="inline-flex min-w-0 items-center gap-2 text-left font-medium text-gray-800 hover:text-blue-600 dark:text-gray-200 dark:hover:text-blue-400">
+                            <svg class="size-5 shrink-0 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 4a2 2 0 012-2h4l2 2h6a2 2 0 012 2v9a2 2 0 01-2 2H4a2 2 0 01-2-2V4z" />
                             </svg>
 
-                            <span class="truncate text-sm font-medium text-gray-800 dark:text-gray-200">
-                                {{ $node['name'] }}
-                            </span>
+                            <span class="truncate">{{ $node['name'] }}</span>
                         </button>
                     @else
                         @php
@@ -419,7 +1514,7 @@ new class extends Component {
                             };
                         @endphp
 
-                        <span class="w-4 shrink-0"></span>
+                        {{-- <span class="w-4 shrink-0"></span> --}}
 
                         <svg class="size-5 shrink-0 {{ $iconColor }}" xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 24 24" fill="currentColor">
@@ -441,8 +1536,51 @@ new class extends Component {
                 </div>
 
                 {{-- Actions --}}
-                <div class="flex items-center justify-end">
+                <div class="grid grid-cols-5 items-center justify-end gap-3">
+                    {{-- extract --}}
+                    @if ($node['type'] === 'file' && strtolower($node['extension'] ?? '') === 'zip')
+                        <button type="button" wire:click="extractArchive(@js($node['path']))"
+                            wire:confirm="Ekstrak {{ $node['name'] }} ke folder baru di direktori ini?"
+                            wire:loading.attr="disabled" wire:target="extractArchive" title="Extract archive"
+                            class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-purple-50 hover:text-purple-600 dark:text-gray-400 dark:hover:bg-purple-500/10 dark:hover:text-purple-400">
+                            <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3a1 1 0 001 1h14a1 1 0 001-1v-3" />
+                            </svg>
+                        </button>
+                    @endif
 
+                    {{-- Rename --}}
+                    <button type="button" wire:click="startRename(@js($node['path']))"
+                        wire:loading.attr="disabled" wire:target="startRename" title="Rename {{ $node['type'] }}"
+                        class="col-start-2 col-end-2 inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-emerald-50 hover:text-emerald-600 dark:text-gray-400 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400">
+                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="m16.862 4.487 1.687-1.687a2.121 2.121 0 013 3l-1.687 1.687m-3-3L7.5 14.5V17h2.5l7.362-7.362m-3-3L16.862 4.487M19 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6" />
+                        </svg>
+                    </button>
+
+                    {{-- Copy --}}
+                    <button type="button" wire:click="startTransfer(@js($node['path']), 'copy')"
+                        wire:loading.attr="disabled" wire:target="startTransfer" title="Copy {{ $node['type'] }}"
+                        class="col-start-3 col-end-3 inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:text-gray-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-400">
+                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 8V5a2 2 0 012-2h9a2 2 0 012 2v9a2 2 0 01-2 2h-3M5 8h9a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2v-9a2 2 0 012-2z" />
+                        </svg>
+                    </button>
+
+                    {{-- Move --}}
+                    <button type="button" wire:click="startTransfer(@js($node['path']), 'move')"
+                        wire:loading.attr="disabled" wire:target="startTransfer" title="Move {{ $node['type'] }}"
+                        class="col-start-4 col-end-4 inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-amber-50 hover:text-amber-600 dark:text-gray-400 dark:hover:bg-amber-500/10 dark:hover:text-amber-400">
+                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 12h16m-6-6 6 6-6 6" />
+                        </svg>
+                    </button>
+
+                    {{-- Delete --}}
                     <button type="button"
                         wire:click="deleteItem(
                             @js($node['path']),
@@ -450,7 +1588,7 @@ new class extends Component {
                         )"
                         wire:confirm="Yakin ingin menghapus {{ $node['name'] }}? {{ $node['type'] === 'folder' ? 'Seluruh isi folder juga akan dihapus.' : '' }}"
                         wire:loading.attr="disabled" wire:target="deleteItem" title="Delete {{ $node['type'] }}"
-                        class="inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-red-100 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-400">
+                        class="col-start-5 col-end-5 inline-flex size-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-red-100 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:opacity-50 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-400">
                         <svg class="size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                             stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round"
@@ -484,13 +1622,6 @@ new class extends Component {
         @endforelse
 
     </div>
-
-    {{-- Footer --}}
-    {{-- <div class="border-t border-gray-200 bg-gray-50 px-5 py-3 dark:border-gray-700 dark:bg-gray-700/30">
-        <p class="text-xs text-gray-500 dark:text-gray-400">
-            {{ count($nodes) }} items shown
-        </p>
-    </div> --}}
 
     <div class="border-t border-gray-200 bg-gray-50 px-5 py-3 dark:border-gray-700 dark:bg-gray-700/30">
         <p class="text-xs text-gray-500 dark:text-gray-400">

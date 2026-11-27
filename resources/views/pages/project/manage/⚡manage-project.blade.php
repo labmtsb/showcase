@@ -40,12 +40,10 @@ new class extends Component {
 };
 ?>
 
-<div class="w-full grid grid-cols-5 gap-4">
+<div class="w-full grid grid-cols-1 md:grid-cols-5 gap-4">
 
+    <livewire:pages::project.manage.file-tree class="md:col-span-3" :path="$path" />
 
-
-    <livewire:pages::project.manage.file-tree class="col-span-3" :path="$path" />
-
-    <x-card class="col-span-2" size="full"></x-card>
+    <x-card class="md:col-span-2" size="full"></x-card>
 
 </div>

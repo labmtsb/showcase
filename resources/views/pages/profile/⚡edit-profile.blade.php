@@ -69,10 +69,10 @@ new class extends Component {
             <x-text-input name="username" label="Your username" wire:model="username" required />
 
 
-            <div class="flex items-center gap-3">
-                <x-button type="submit" label="Update" loading-label="Updating..." variant="primary" target="update" />
+            <div class="flex items-center justify-end gap-3">
                 <x-button type="button" label="Cancel" variant="secondary"
                     @click="$dispatch('close-modal', { name: 'editProfileModal' })" />
+                <x-button type="submit" label="Update" loading-label="Updating..." variant="primary" target="update" />
             </div>
         </x-form>
 
