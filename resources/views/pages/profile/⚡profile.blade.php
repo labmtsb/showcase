@@ -48,7 +48,7 @@ new class extends Component {
                 <dd class="text-lg font-medium">{{ Auth::user()->nis ?? '' }}</dd>
             </div>
 
-            <div class="flex flex-col pb-3">
+            <div class="flex flex-col py-3">
                 <dt class="mb-1 text-body">Name</dt>
                 <dd class="text-lg font-medium">{{ Auth::user()->name }}</dd>
             </div>

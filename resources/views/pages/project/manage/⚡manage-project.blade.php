@@ -44,6 +44,6 @@ new class extends Component {
 
     <livewire:pages::project.manage.file-tree class="md:col-span-3" :path="$path" />
 
-    <x-card class="md:col-span-2" size="full"></x-card>
+    <livewire:pages::project.manage.config-project class="md:col-span-2" :id="$project->id" />
 
 </div>

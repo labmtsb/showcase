@@ -16,7 +16,7 @@ new class extends Component {
 
         $this->params = [
             'user' => $this->project->user_id,
-            'project' => $this->project->slug . '/index.html',
+            'project' => $this->project->slug . '/' . $this->project->entry_point,
         ];
     }
 
@@ -55,8 +55,5 @@ new class extends Component {
         <iframe src="{{ route('project.preview', $params) }}" class="w-full h-screen" title="Project Preview"
             frameborder="0"></iframe>
     </div>
-
-
-
 
 </div>

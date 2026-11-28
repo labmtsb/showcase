@@ -171,10 +171,8 @@ new class extends Component {
 
                     <div
                         class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                        <svg class="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5l5 5v11a2 2 0 01-2 2z" />
-                        </svg>
+
+                        <x-lucide-file-text class="w-5 h-5" />
                     </div>
 
                     <div class="min-w-0">
@@ -198,9 +196,8 @@ new class extends Component {
 
                     <button type="button" wire:click="saveFile" wire:loading.attr="disabled" wire:target="saveFile"
                         class="inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                        <svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                        </svg>
+
+                        <x-lucide-save class="w-4 h-4" />
 
                         <span wire:loading.remove wire:target="saveFile">
                             Save
